@@ -1,0 +1,6 @@
+{
+  "name": "Daynest",
+  "description": "A cozy, warm, and mindful voice journal, tracker, and scheduler designed to guide you through ideas, planning, and execution.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

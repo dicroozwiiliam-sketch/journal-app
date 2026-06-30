@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  --color-cozy-bg: #F5EEDB; /* Warm cozy beige */
+  --color-cozy-card: #FAF6EB; /* Warm cream paper */
+  --color-cozy-border: #E8DCC4; /* Muted warm clay border */
+  --color-cozy-text-dark: #4A3D30; /* Dark chocolate for contrast */
+  --color-cozy-text-muted: #7A6956; /* Soft warm cocoa brown */
+  --color-cozy-orange: #E08E6D; /* Terracotta orange */
+  --color-cozy-green: #96A376; /* Soft olive sage green */
+  --color-cozy-yellow: #E6C585; /* Warm mustard yellow */
+  --color-cozy-accent: #C2704E; /* Deep brick/accent */
+}
+
+/* Custom whimsical styles to match the hand-drawn organic feeling */
+.cozy-shadow {
+  box-shadow: 0 8px 0px 0px rgba(74, 61, 48, 0.08);
+}
+
+.cozy-shadow-sm {
+  box-shadow: 0 4px 0px 0px rgba(74, 61, 48, 0.08);
+}
+
+.cozy-shadow-lg {
+  box-shadow: 0 12px 0px 0px rgba(74, 61, 48, 0.1);
+}
+
+.cozy-border-thick {
+  border: 3px solid #4A3D30;
+}
+
+.cozy-border-medium {
+  border: 2px solid #4A3D30;
+}
+
+/* Scrollbar styling to stay warm and playful */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F5EEDB;
+}
+::-webkit-scrollbar-thumb {
+  background: #CDBDA2;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A8987E;
+}
