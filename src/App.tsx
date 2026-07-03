@@ -9,7 +9,6 @@ import {
   Mic, 
   Calendar, 
   TrendingUp, 
-  Target, 
   Brain, 
   User, 
   Sparkles, 
@@ -34,7 +33,6 @@ import Auth from './components/Auth';
 import RecordingScreen from './components/RecordingScreen';
 import JournalTimeline from './components/JournalTimeline';
 import MoodAnalytics from './components/MoodAnalytics';
-import GoalsTracker from './components/GoalsTracker';
 import AiCoach from './components/AiCoach';
 import ProfilePage from './components/ProfilePage';
 import RealTimeDashboard from './components/RealTimeDashboard';
@@ -227,9 +225,10 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [currentTab, setCurrentTab] = useState<'home' | 'timeline' | 'analytics' | 'goals' | 'coach' | 'profile'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'timeline' | 'analytics' | 'coach' | 'profile'>('home');
   const [isRecordingOverlayActive, setIsRecordingOverlayActive] = useState(false);
   const [isWritingMode, setIsWritingMode] = useState(false); // voice vs typing toggle
+  const [autoSelectEntryId, setAutoSelectEntryId] = useState<string | null>(null);
 
   // Application Data States
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
@@ -301,6 +300,33 @@ export default function App() {
         return b;
       });
     });
+  };
+
+  // Create a blank Notion-like journal page
+  const handleCreateJournalPage = () => {
+    const newId = `entry-${Date.now()}`;
+    const newPage: JournalEntry = {
+      id: newId,
+      date: new Date().toISOString(),
+      duration: 0,
+      transcript: '',
+      summary: '',
+      mood: 'Calm',
+      moodEmoji: '😊',
+      topics: [],
+      tags: ['Reflections'],
+      emotions: [],
+      takeaways: [],
+      ...({
+        blocks: [
+          { id: 'b-title', type: 'h1', content: '' },
+          { id: `b-p-${Date.now()}`, type: 'paragraph', content: '' }
+        ]
+      })
+    } as any;
+    setEntries(prev => [newPage, ...prev]);
+    setAutoSelectEntryId(newId);
+    setCurrentTab('timeline');
   };
 
   // Profile actions
@@ -446,7 +472,16 @@ export default function App() {
 
           {/* Quick Tab Menu Options */}
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider px-2 mb-1">Workspace</span>
+            <div className="flex items-center justify-between px-2 mb-1">
+              <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider">Workspace</span>
+              <button
+                onClick={handleCreateJournalPage}
+                className="p-1 hover:bg-cozy-card rounded border border-transparent hover:border-cozy-text-dark text-cozy-text-muted hover:text-cozy-text-dark transition flex items-center justify-center cursor-pointer"
+                title="Create blank Notion journal page"
+              >
+                <Plus size={11} strokeWidth={3} />
+              </button>
+            </div>
             
             <button
               onClick={() => {
@@ -499,23 +534,6 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setCurrentTab('goals')}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
-                currentTab === 'goals' 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Target size={16} />
-                <span>Focus & Goals</span>
-              </div>
-              <span className="text-[10px] font-black bg-cozy-yellow text-cozy-text-dark px-2.5 py-0.5 rounded-full border-2 border-cozy-text-dark shadow-sm">
-                {goals.length}
-              </span>
-            </button>
-
-            <button
               onClick={() => setCurrentTab('coach')}
               className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
                 currentTab === 'coach' 
@@ -540,8 +558,8 @@ export default function App() {
                 <p className="text-xl font-black text-cozy-text-dark mt-1">{entries.length}</p>
               </div>
               <div className="bg-cozy-card p-3.5 rounded-xl border-2 border-cozy-text-dark shadow-sm">
-                <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Goals Set</p>
-                <p className="text-xl font-black text-cozy-text-dark mt-1">{goals.length}</p>
+                <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Daily Streak</p>
+                <p className="text-xl font-black text-cozy-text-dark mt-1">{user?.streak || 0}d 🔥</p>
               </div>
             </div>
           </div>
@@ -560,7 +578,7 @@ export default function App() {
         </aside>
 
         {/* ACTIVE WORKSPACE AREA */}
-        <main className="flex-1 flex flex-col min-h-[calc(100vh-4rem)] max-w-full lg:max-w-[calc(100vw-18rem-20rem)] bg-cozy-bg relative overflow-y-auto">
+        <main className="flex-1 flex flex-col min-h-[calc(100vh-4rem)] max-w-full lg:max-w-[calc(100vw-18rem)] xl:max-w-[calc(100vw-18rem-20rem)] bg-cozy-bg relative overflow-y-auto">
           
           <AnimatePresence mode="wait">
             {isRecordingOverlayActive ? (
@@ -575,6 +593,7 @@ export default function App() {
                   onSave={handleSaveEntry}
                   onCancel={() => setIsRecordingOverlayActive(false)}
                   isWritingMode={isWritingMode}
+                  setIsWritingMode={setIsWritingMode}
                 />
               </motion.div>
             ) : (
@@ -591,7 +610,13 @@ export default function App() {
                     userName={user.name}
                     isWritingMode={isWritingMode}
                     setIsWritingMode={setIsWritingMode}
-                    onStartRecording={() => setIsRecordingOverlayActive(true)}
+                    onStartRecording={() => {
+                      if (isWritingMode) {
+                        handleCreateJournalPage();
+                      } else {
+                        setIsRecordingOverlayActive(true);
+                      }
+                    }}
                     entriesCount={entries.length}
                     goalsCount={goals.length}
                     currentGoalTitle={goals[0]?.title || "Active Goal"}
@@ -605,23 +630,14 @@ export default function App() {
                     entries={entries}
                     onDeleteEntry={handleDeleteEntry}
                     onUpdateEntry={handleUpdateEntry}
+                    autoSelectEntryId={autoSelectEntryId}
+                    onClearAutoSelect={() => setAutoSelectEntryId(null)}
                   />
                 )}
 
                 {currentTab === 'analytics' && (
                   <MoodAnalytics 
                     entries={entries}
-                  />
-                )}
-
-                {currentTab === 'goals' && (
-                  <GoalsTracker 
-                    goals={goals}
-                    habits={habits}
-                    onAddGoal={handleAddGoal}
-                    onDeleteGoal={handleDeleteGoal}
-                    onToggleHabit={handleToggleHabit}
-                    onAddHabit={handleAddHabit}
                   />
                 )}
 
@@ -638,7 +654,6 @@ export default function App() {
                     isPremium={user.isPremium}
                     onTogglePremium={handleTogglePremium}
                     entries={entries}
-                    goals={goals}
                     badges={badges}
                     onLogout={handleLogout}
                   />
@@ -772,20 +787,6 @@ export default function App() {
         >
           <TrendingUp size={20} className={currentTab === 'analytics' ? 'stroke-[2.5]' : 'stroke-2'} />
           <span className="text-[9px] font-black uppercase tracking-tight">Insights</span>
-        </button>
-
-        {/* Tab 4: Goals */}
-        <button
-          onClick={() => {
-            setCurrentTab('goals');
-            setIsRecordingOverlayActive(false);
-          }}
-          className={`flex flex-col items-center gap-1 transition ${
-            currentTab === 'goals' ? 'text-cozy-orange' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-          }`}
-        >
-          <Target size={20} className={currentTab === 'goals' ? 'stroke-[2.5]' : 'stroke-2'} />
-          <span className="text-[9px] font-black uppercase tracking-tight">Goals</span>
         </button>
 
         {/* Tab 5: AI Coach */}

@@ -1,6 +1,6 @@
 {
   "name": "Daynest",
-  "description": "A cozy, warm, and mindful voice journal, tracker, and scheduler designed to guide you through ideas, planning, and execution.",
+  "description": "A cozy, warm, and mindful voice journal, tracker, and scheduler with an advanced, Notion-inspired block-based interactive editor.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

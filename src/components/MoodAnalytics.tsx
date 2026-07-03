@@ -94,7 +94,7 @@ export default function MoodAnalytics({ entries }: MoodAnalyticsProps) {
   const calendarDays = getCalendarDays();
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 pb-20" id="analytics_tab">
+    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8 pb-20" id="analytics_tab">
       
       {/* Header */}
       <div className="mb-5">
@@ -103,7 +103,7 @@ export default function MoodAnalytics({ entries }: MoodAnalyticsProps) {
       </div>
  
       {/* 4 Score Cards Bento-Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         {/* Emotional Health */}
         <div className="p-3.5 bg-cozy-card border-2 border-cozy-text-dark rounded-xl flex items-center gap-3 shadow-sm">
           <div className="p-2 bg-pink-100 text-pink-600 border border-pink-200 rounded-lg shrink-0">
@@ -252,10 +252,10 @@ export default function MoodAnalytics({ entries }: MoodAnalyticsProps) {
           <span>AI Insights & Observations</span>
         </h4>
  
-        <div className="space-y-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Observation 1 */}
           <div className="p-3.5 bg-cozy-card border-2 border-cozy-text-dark rounded-xl flex gap-3 items-start shadow-sm">
-            <span className="text-lg">📈</span>
+            <span className="text-lg text-cozy-orange shrink-0">📈</span>
             <div>
               <p className="text-xs font-black text-cozy-text-dark">Trigger Pattern Detected</p>
               <p className="text-[11px] text-cozy-text-muted mt-1 leading-normal font-bold">
@@ -266,7 +266,7 @@ export default function MoodAnalytics({ entries }: MoodAnalyticsProps) {
  
           {/* Observation 2 */}
           <div className="p-3.5 bg-cozy-card border-2 border-cozy-text-dark rounded-xl flex gap-3 items-start shadow-sm">
-            <span className="text-lg">💡</span>
+            <span className="text-lg text-cozy-orange shrink-0">💡</span>
             <div>
               <p className="text-xs font-black text-cozy-text-dark">Stress Correlation</p>
               <p className="text-[11px] text-cozy-text-muted mt-1 leading-normal font-bold">

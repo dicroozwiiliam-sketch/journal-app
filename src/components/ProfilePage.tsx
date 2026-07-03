@@ -14,7 +14,6 @@ interface ProfilePageProps {
   isPremium: boolean;
   onTogglePremium: () => void;
   entries: JournalEntry[];
-  goals: Goal[];
   badges: Badge[];
   onLogout: () => void;
 }
@@ -25,15 +24,13 @@ export default function ProfilePage({
   isPremium,
   onTogglePremium,
   entries,
-  goals,
   badges,
   onLogout,
 }: ProfilePageProps) {
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(true);
-
-  const completedGoalsCount = goals.filter(g => g.progress >= 100).length;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const exportData = (format: 'txt' | 'md' | 'csv') => {
     let fileContent = '';
@@ -101,7 +98,7 @@ ${entry.takeaways.map(t => `* ${t}`).join('\n')}
   };
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 pb-20" id="profile_tab">
+    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8 pb-20" id="profile_tab">
       
       {/* Header */}
       <div className="mb-5">
@@ -138,7 +135,7 @@ ${entry.takeaways.map(t => `* ${t}`).join('\n')}
               <span className="font-black text-cozy-text-dark">{entries.length}</span> entries
             </div>
             <div>
-              <span className="font-black text-cozy-text-dark">{completedGoalsCount}</span> completed
+              <span className="font-black text-cozy-text-dark">{badges.filter(b => b.unlocked).length}</span> badges
             </div>
           </div>
         </div>
@@ -180,56 +177,65 @@ ${entry.takeaways.map(t => `* ${t}`).join('\n')}
         </button>
       </div>
  
-      {/* Gamified Achievements / Badges Section */}
-      <div className="p-4 bg-cozy-card border-2 border-cozy-text-dark rounded-2xl mb-6 shadow-sm">
-        <h4 className="text-xs font-black text-cozy-text-dark mb-3 flex items-center gap-1.5">
-          <Award size={14} className="text-cozy-orange" />
-          <span>Badges & Gamification</span>
-        </h4>
- 
-        <div className="grid grid-cols-5 gap-2">
-          {badges.map((badge) => (
-            <div
-              key={badge.id}
-              className={`flex flex-col items-center p-1.5 rounded-xl text-center border-2 transition ${
-                badge.unlocked 
-                  ? 'bg-cozy-yellow/30 border-cozy-text-dark text-cozy-text-dark shadow-sm font-black' 
-                  : 'bg-cozy-bg border-cozy-text-dark/10 opacity-30'
-              }`}
-              title={`${badge.title}: ${badge.description}`}
-            >
-              <div className="text-lg mb-1">{badge.icon}</div>
-              <p className="text-[8px] font-black truncate w-full">{badge.title}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        {/* Gamified Achievements / Badges Section */}
+        <div className="p-4 bg-cozy-card border-2 border-cozy-text-dark rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <h4 className="text-xs font-black text-cozy-text-dark mb-3 flex items-center gap-1.5">
+              <Award size={14} className="text-cozy-orange" />
+              <span>Badges & Gamification</span>
+            </h4>
+  
+            <div className="grid grid-cols-5 gap-2">
+              {badges.map((badge) => (
+                <div
+                  key={badge.id}
+                  className={`flex flex-col items-center p-1.5 rounded-xl text-center border-2 transition ${
+                    badge.unlocked 
+                      ? 'bg-cozy-yellow/30 border-cozy-text-dark text-cozy-text-dark shadow-sm font-black' 
+                      : 'bg-cozy-bg border-cozy-text-dark/10 opacity-30'
+                  }`}
+                  title={`${badge.title}: ${badge.description}`}
+                >
+                  <div className="text-lg mb-1">{badge.icon}</div>
+                  <p className="text-[8px] font-black truncate w-full">{badge.title}</p>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      </div>
- 
-      {/* Data Export Options */}
-      <div className="p-4 bg-cozy-card border-2 border-cozy-text-dark rounded-2xl mb-6 shadow-sm">
-        <h4 className="text-xs font-black text-cozy-text-dark mb-3 flex items-center gap-1.5">
-          <Download size={14} className="text-cozy-green" />
-          <span>Export Your Data</span>
-        </h4>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => exportData('txt')}
-            className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
-          >
-            TXT Format
-          </button>
-          <button
-            onClick={() => exportData('md')}
-            className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
-          >
-            Markdown
-          </button>
-          <button
-            onClick={() => exportData('csv')}
-            className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
-          >
-            CSV Sheets
-          </button>
+  
+        {/* Data Export Options */}
+        <div className="p-4 bg-cozy-card border-2 border-cozy-text-dark rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <h4 className="text-xs font-black text-cozy-text-dark mb-3 flex items-center gap-1.5">
+              <Download size={14} className="text-cozy-green" />
+              <span>Export Your Data</span>
+            </h4>
+            <p className="text-[11px] font-semibold text-cozy-text-muted leading-relaxed mb-4">
+              Backup your full audio transcripts and emotional parameters to use in spreadsheet or document tools.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => exportData('txt')}
+              className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
+            >
+              TXT Format
+            </button>
+            <button
+              onClick={() => exportData('md')}
+              className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
+            >
+              Markdown
+            </button>
+            <button
+              onClick={() => exportData('csv')}
+              className="py-2 bg-cozy-bg hover:bg-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark uppercase tracking-wider transition shadow-sm"
+            >
+              CSV Sheets
+            </button>
+          </div>
         </div>
       </div>
  
@@ -294,21 +300,31 @@ ${entry.takeaways.map(t => `* ${t}`).join('\n')}
         <div className="flex gap-3 pt-3">
           <button
             onClick={onLogout}
-            className="flex-1 py-2.5 bg-cozy-card border-2 border-cozy-text-dark hover:bg-cozy-bg text-cozy-text-dark text-xs font-black rounded-xl transition shadow-sm"
+            className="flex-1 py-2.5 bg-cozy-card border-2 border-cozy-text-dark hover:bg-cozy-bg text-cozy-text-dark text-xs font-black rounded-xl transition shadow-sm cursor-pointer"
           >
             Sign Out
           </button>
-          <button
-            onClick={() => {
-              if (confirm("DANGER: Are you absolutely sure you want to delete your Voice Journal account? This will wipe all offline storage and recordings permanently.")) {
-                alert("Account successfully deleted.");
+          {showDeleteConfirm ? (
+            <button
+              onClick={() => {
+                localStorage.clear();
                 onLogout();
-              }
-            }}
-            className="flex-1 py-2.5 bg-rose-50 border-2 border-rose-300 text-rose-600 hover:bg-rose-600 hover:text-white text-xs font-black rounded-xl transition shadow-sm"
-          >
-            Delete Account
-          </button>
+              }}
+              className="flex-1 py-2.5 bg-rose-600 border-2 border-rose-700 text-white hover:bg-rose-700 text-xs font-black rounded-xl transition shadow-sm animate-pulse cursor-pointer"
+            >
+              Confirm Wipe?
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setShowDeleteConfirm(true);
+                setTimeout(() => setShowDeleteConfirm(false), 5000); // reset after 5s
+              }}
+              className="flex-1 py-2.5 bg-rose-50 border-2 border-rose-300 text-rose-600 hover:bg-rose-100 text-xs font-black rounded-xl transition shadow-sm cursor-pointer"
+            >
+              Delete Account
+            </button>
+          )}
         </div>
       </div>
  

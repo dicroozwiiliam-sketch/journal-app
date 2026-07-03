@@ -175,7 +175,7 @@ export default function AiCoach({ entries }: AiCoachProps) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 pb-20" id="ai_coach_tab">
+    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8 pb-20" id="ai_coach_tab">
       
       {/* Header */}
       <div className="mb-4 shrink-0">
@@ -187,7 +187,7 @@ export default function AiCoach({ entries }: AiCoachProps) {
       </div>
  
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-3 pr-1 max-h-[420px]" id="coach_chat_box">
+      <div className="flex-1 overflow-y-auto space-y-4 mb-3 pr-1 h-[420px] md:h-[550px] max-h-[50vh] md:max-h-[68vh]" id="coach_chat_box">
         {messages.map((msg) => {
           const isCoach = msg.sender === 'coach';
           const isSpeakingThis = speakingMsgId === msg.id;

@@ -12,7 +12,7 @@ import {
   FileText,
   ChevronRight,
   TrendingUp,
-  Target
+  Calendar
 } from 'lucide-react';
 import { WavingCatIllustration } from './illustrations';
 
@@ -25,7 +25,7 @@ interface RealTimeDashboardProps {
   goalsCount: number;
   currentGoalTitle: string;
   currentGoalProgress: number;
-  onNavigateTab: (tab: 'home' | 'timeline' | 'analytics' | 'goals' | 'coach' | 'profile') => void;
+  onNavigateTab: (tab: 'home' | 'timeline' | 'analytics' | 'coach' | 'profile') => void;
 }
 
 export default function RealTimeDashboard({
@@ -236,9 +236,9 @@ export default function RealTimeDashboard({
           </div>
         </div>
 
-        {/* Goals Tracker mockup card featuring the adorable striped waving cat from Screen 2! */}
+        {/* Diary Timeline Card featuring the adorable striped waving cat from Screen 2! */}
         <div 
-          onClick={() => onNavigateTab('goals')}
+          onClick={() => onNavigateTab('timeline')}
           className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-6 hover:border-cozy-orange cursor-pointer transition flex flex-col justify-between min-h-[140px] cozy-shadow relative group overflow-hidden"
         >
           {/* Adorable little waving cat head peaking from the side */}
@@ -248,27 +248,20 @@ export default function RealTimeDashboard({
 
           <div className="flex items-center justify-between relative z-10">
             <div className="flex items-center gap-2 text-cozy-accent">
-              <Target size={16} strokeWidth={2.5} />
-              <span className="text-xs font-black uppercase tracking-wider">Active Goal Focus</span>
+              <Calendar size={16} strokeWidth={2.5} />
+              <span className="text-xs font-black uppercase tracking-wider">Diary Timeline</span>
             </div>
             <ChevronRight size={14} className="text-cozy-text-muted group-hover:translate-x-1 transition" />
           </div>
 
           <div className="mt-3 relative z-10 max-w-[70%]">
-            <div className="flex items-center justify-between text-[11px] font-extrabold mb-1.5">
-              <span className="text-cozy-text-dark truncate">{currentGoalTitle}</span>
-              <span className="text-cozy-accent font-black">{currentGoalProgress}%</span>
-            </div>
-            <div className="w-full bg-cozy-bg border-2 border-cozy-text-dark h-3 rounded-full overflow-hidden">
-              <div 
-                className="bg-cozy-orange h-full rounded-full transition-all duration-500" 
-                style={{ width: `${currentGoalProgress}%` }}
-              />
-            </div>
+            <p className="text-xs text-cozy-text-muted font-semibold leading-relaxed">
+              Explore your personal chronological canvas of text, voice recordings, pictures, and beautiful stickers.
+            </p>
           </div>
 
           <div className="text-[10px] text-cozy-text-muted font-bold uppercase mt-4 relative z-10">
-            <span>Active Habits: {goalsCount} Set</span>
+            <span>Total Memories: {entriesCount} Logged</span>
           </div>
         </div>
 
