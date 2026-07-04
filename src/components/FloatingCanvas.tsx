@@ -785,20 +785,20 @@ export default function FloatingCanvas({
         })}
       </div>
 
-      {/* 2. FIXED RIGHT-CENTER SCRAPBOOK TOOLS BUTTON AND ACCORDION PANEL */}
-      <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex items-center pointer-events-none">
+      {/* 2. FIXED BOTTOM-RIGHT SCRAPBOOK TOOLS BUTTON AND ACCORDION PANEL */}
+      <div className="fixed right-6 bottom-6 z-50 flex flex-col items-end pointer-events-none">
         
         {/* Toggle tools drawer */}
-        <div className="flex items-center pointer-events-auto select-none">
+        <div className="flex flex-col items-end pointer-events-auto select-none">
           
           {/* Drawer Panel */}
           <AnimatePresence>
             {isToolsOpen && (
               <motion.div
-                initial={{ opacity: 0, x: 50, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 50, scale: 0.95 }}
-                className="mr-3 w-80 max-h-[85vh] bg-white border-3 border-cozy-text-dark rounded-2xl shadow-2xl p-4 flex flex-col text-cozy-text-dark toolbox-panel overflow-hidden cozy-shadow-lg"
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 30, scale: 0.95 }}
+                className="mb-3 w-80 max-h-[70vh] bg-white border-3 border-cozy-text-dark rounded-2xl shadow-2xl p-4 flex flex-col text-cozy-text-dark toolbox-panel overflow-hidden cozy-shadow-lg"
               >
                 {/* Header with Close and Undo/Redo */}
                 <div className="flex justify-between items-center pb-2.5 mb-3 border-b-2 border-cozy-text-dark/15">
