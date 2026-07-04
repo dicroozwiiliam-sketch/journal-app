@@ -22,6 +22,7 @@ import {
   Activity,
   Award,
   ChevronRight,
+  ChevronLeft,
   MessageSquare,
   FileText,
   AlertCircle
@@ -36,6 +37,7 @@ import MoodAnalytics from './components/MoodAnalytics';
 import AiCoach from './components/AiCoach';
 import ProfilePage from './components/ProfilePage';
 import RealTimeDashboard from './components/RealTimeDashboard';
+import JournalToolsPanel from './components/JournalToolsPanel';
 
 // Realistic Seed Data to make the application alive and beautiful on start
 const SEED_ENTRIES: JournalEntry[] = [
@@ -229,6 +231,25 @@ export default function App() {
   const [isRecordingOverlayActive, setIsRecordingOverlayActive] = useState(false);
   const [isWritingMode, setIsWritingMode] = useState(false); // voice vs typing toggle
   const [autoSelectEntryId, setAutoSelectEntryId] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
+  const [timelineControls, setTimelineControls] = useState<any>(null);
+  const [calendarTargetDate, setCalendarTargetDate] = useState<Date | null>(null);
+
+  const isJournalTab = currentTab === 'timeline';
+
+  useEffect(() => {
+    if (currentTab !== 'timeline') {
+      setSelectedEntry(null);
+      setTimelineControls(null);
+    }
+  }, [currentTab]);
+
+  useEffect(() => {
+    if (currentTab !== 'analytics') {
+      setCalendarTargetDate(null);
+    }
+  }, [currentTab]);
 
   // Application Data States
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
@@ -303,14 +324,17 @@ export default function App() {
   };
 
   // Create a blank Notion-like journal page
-  const handleCreateJournalPage = () => {
+  const handleCreateJournalPage = (customDate?: Date) => {
     const newId = `entry-${Date.now()}`;
+    const entryDate = customDate ? customDate.toISOString() : new Date().toISOString();
+    const formattedLabel = customDate ? customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    
     const newPage: JournalEntry = {
       id: newId,
-      date: new Date().toISOString(),
+      date: entryDate,
       duration: 0,
       transcript: '',
-      summary: '',
+      summary: customDate ? `Reflections for ${formattedLabel}` : '',
       mood: 'Calm',
       moodEmoji: '😊',
       topics: [],
@@ -319,8 +343,8 @@ export default function App() {
       takeaways: [],
       ...({
         blocks: [
-          { id: 'b-title', type: 'h1', content: '' },
-          { id: `b-p-${Date.now()}`, type: 'paragraph', content: '' }
+          { id: 'b-title', type: 'h1', content: customDate ? `Journal Entry - ${formattedLabel}` : '' },
+          { id: `b-p-${Date.now()}`, type: 'paragraph', content: customDate ? `Reflections and daily planning on ${formattedLabel}... ☕` : '' }
         ]
       })
     } as any;
@@ -436,19 +460,13 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Streak Badge */}
-          <div className="flex items-center gap-1.5 bg-cozy-yellow px-3.5 py-1.5 rounded-full border-2 border-cozy-text-dark shadow-sm">
-            <span className="text-sm select-none">🔥</span>
-            <span className="text-xs font-black text-cozy-text-dark">{user.streak} Day Streak</span>
-          </div>
-          
           {/* Circular avatar bubble */}
           <div 
             onClick={() => setCurrentTab('profile')} 
-            className="w-10 h-10 rounded-xl bg-cozy-orange border-2 border-cozy-text-dark cursor-pointer flex items-center justify-center text-xs font-black text-white select-none shadow-sm hover:scale-105 transition"
+            className={`w-10 h-10 rounded-xl ${user.avatarBg || "bg-cozy-orange"} border-2 border-cozy-text-dark cursor-pointer flex items-center justify-center text-sm font-black text-white select-none shadow-sm hover:scale-105 transition`}
             title="View Profile Settings"
           >
-            {user.name.charAt(0).toUpperCase()}
+            {user.avatarEmoji || user.name.charAt(0).toUpperCase()}
           </div>
         </div>
       </nav>
@@ -457,128 +475,179 @@ export default function App() {
       <div className="flex-1 flex w-full relative">
         
         {/* DESKTOP SIDEBAR (visible on large screen) */}
-        <aside className="hidden lg:flex w-72 border-r-3 border-cozy-text-dark p-6 flex-col gap-6 shrink-0 bg-cozy-bg">
-          
-          {/* Greeting Box */}
-          <div className="bg-cozy-card rounded-2xl p-5 border-2 border-cozy-text-dark shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-cozy-yellow/10 rounded-full blur-xl" />
-            <h3 className="text-cozy-text-muted text-[10px] font-black uppercase tracking-wider mb-2">
-              Good Day, {user.name.split(' ')[0]} 👋
-            </h3>
-            <p className="text-xs text-cozy-text-dark italic leading-relaxed font-semibold">
-              "Every thought you speak is an elegant piece of your personal growth story."
-            </p>
-          </div>
-
-          {/* Quick Tab Menu Options */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between px-2 mb-1">
-              <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider">Workspace</span>
+        <aside 
+          className={`hidden lg:flex border-r-3 border-cozy-text-dark flex-col shrink-0 bg-cozy-bg transition-all duration-300 relative ${
+            isSidebarCollapsed ? 'w-20 p-4 gap-4' : 'w-72 p-6 gap-6'
+          }`}
+        >
+            
+            {/* Collapse/Expand Toggle Row */}
+            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} w-full border-b border-cozy-text-dark/10 pb-3`}>
+              {!isSidebarCollapsed && (
+                <span className="text-[10px] font-black text-cozy-text-dark uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="text-cozy-orange animate-pulse">●</span> Core System
+                </span>
+              )}
               <button
-                onClick={handleCreateJournalPage}
-                className="p-1 hover:bg-cozy-card rounded border border-transparent hover:border-cozy-text-dark text-cozy-text-muted hover:text-cozy-text-dark transition flex items-center justify-center cursor-pointer"
-                title="Create blank Notion journal page"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className="p-1.5 hover:bg-cozy-card text-cozy-text-dark border-2 border-cozy-text-dark rounded-xl transition-all shadow-sm hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center bg-white"
+                title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
               >
-                <Plus size={11} strokeWidth={3} />
+                {isSidebarCollapsed ? <ChevronRight size={13} strokeWidth={3} /> : <ChevronLeft size={13} strokeWidth={3} />}
               </button>
             </div>
-            
-            <button
-              onClick={() => {
-                setCurrentTab('home');
-                setIsRecordingOverlayActive(false);
-              }}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
-                currentTab === 'home' 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Mic size={16} />
-                <span>Daily Reflection</span>
-              </div>
-              <ChevronRight size={13} className="opacity-60" />
-            </button>
 
-            <button
-              onClick={() => setCurrentTab('timeline')}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
-                currentTab === 'timeline' 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Calendar size={16} />
-                <span>Diary Timeline</span>
+            {/* Greeting Box */}
+            {!isSidebarCollapsed && (
+              <div className="bg-cozy-card rounded-2xl p-5 border-2 border-cozy-text-dark shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-cozy-yellow/10 rounded-full blur-xl" />
+                <h3 className="text-cozy-text-muted text-[10px] font-black uppercase tracking-wider mb-2">
+                  Good Day, {user.name.split(' ')[0]} 👋
+                </h3>
+                <p className="text-xs text-cozy-text-dark italic leading-relaxed font-semibold">
+                  "Every thought you speak is an elegant piece of your personal growth story."
+                </p>
               </div>
-              <span className="text-[10px] font-black bg-cozy-yellow text-cozy-text-dark px-2.5 py-0.5 rounded-full border-2 border-cozy-text-dark shadow-sm">
-                {entries.length}
-              </span>
-            </button>
+            )}
 
-            <button
-              onClick={() => setCurrentTab('analytics')}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
-                currentTab === 'analytics' 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <TrendingUp size={16} />
-                <span>Emotional Analytics</span>
+            {/* Quick Tab Menu Options */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-2 mb-1">
+                {!isSidebarCollapsed ? (
+                  <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider">Workspace</span>
+                ) : (
+                  <div className="h-[1px] bg-cozy-text-dark/10 w-full my-1" />
+                )}
+                {!isSidebarCollapsed && (
+                  <button
+                    onClick={handleCreateJournalPage}
+                    className="p-1 hover:bg-cozy-card rounded border border-transparent hover:border-cozy-text-dark text-cozy-text-muted hover:text-cozy-text-dark transition flex items-center justify-center cursor-pointer"
+                    title="Create blank Notion journal page"
+                  >
+                    <Plus size={11} strokeWidth={3} />
+                  </button>
+                )}
               </div>
-              <ChevronRight size={13} className="opacity-60" />
-            </button>
+              
+              <button
+                onClick={() => {
+                  setCurrentTab('home');
+                  setIsRecordingOverlayActive(false);
+                }}
+                title="Daily Reflection"
+                className={`flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
+                  currentTab === 'home' 
+                    ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
+                    : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Mic size={16} />
+                  {!isSidebarCollapsed && <span>Daily Reflection</span>}
+                </div>
+                {!isSidebarCollapsed && <ChevronRight size={13} className="opacity-60" />}
+              </button>
 
-            <button
-              onClick={() => setCurrentTab('coach')}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
-                currentTab === 'coach' 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Brain size={16} />
-                <span>AI Life Coach</span>
-              </div>
-              <ChevronRight size={13} className="opacity-60" />
-            </button>
-          </div>
+              <button
+                onClick={() => setCurrentTab('timeline')}
+                title="Diary Timeline"
+                className={`flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
+                  currentTab === 'timeline' 
+                    ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
+                    : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileText size={16} />
+                  {!isSidebarCollapsed && <span>Diary Timeline</span>}
+                </div>
+                {!isSidebarCollapsed && (
+                  <span className="text-[10px] font-black bg-cozy-yellow text-cozy-text-dark px-2.5 py-0.5 rounded-full border-2 border-cozy-text-dark shadow-sm">
+                    {entries.length}
+                  </span>
+                )}
+              </button>
 
-          {/* Quick Stats Grid */}
-          <div className="space-y-3">
-            <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider px-2">Quick Stats</span>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-cozy-card p-3.5 rounded-xl border-2 border-cozy-text-dark shadow-sm">
-                <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Total Logs</p>
-                <p className="text-xl font-black text-cozy-text-dark mt-1">{entries.length}</p>
-              </div>
-              <div className="bg-cozy-card p-3.5 rounded-xl border-2 border-cozy-text-dark shadow-sm">
-                <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Daily Streak</p>
-                <p className="text-xl font-black text-cozy-text-dark mt-1">{user?.streak || 0}d 🔥</p>
-              </div>
+              <button
+                onClick={() => setCurrentTab('analytics')}
+                title="Calendar"
+                className={`flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
+                  currentTab === 'analytics' 
+                    ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
+                    : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Calendar size={16} />
+                  {!isSidebarCollapsed && <span>Calendar</span>}
+                </div>
+                {!isSidebarCollapsed && <ChevronRight size={13} className="opacity-60" />}
+              </button>
+
+              <button
+                onClick={() => setCurrentTab('coach')}
+                title="AI Life Coach"
+                className={`flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
+                  currentTab === 'coach' 
+                    ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
+                    : 'text-cozy-text-muted border-transparent hover:bg-cozy-card hover:text-cozy-text-dark'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Brain size={16} />
+                  {!isSidebarCollapsed && <span>AI Life Coach</span>}
+                </div>
+                {!isSidebarCollapsed && <ChevronRight size={13} className="opacity-60" />}
+              </button>
             </div>
-          </div>
 
-          {/* Active Premium Member widget */}
-          <div className="mt-auto bg-cozy-yellow/30 border-2 border-cozy-text-dark rounded-2xl p-4">
-            <div className="flex items-center gap-1.5 text-[10px] font-black text-cozy-accent uppercase tracking-wider mb-1">
-              <Crown size={12} fill="currentColor" />
-              <span>Premium Member</span>
-            </div>
-            <p className="text-[11px] text-cozy-text-dark font-semibold leading-normal">
-              Cloud backups & AI speech synthesizing are active.
-            </p>
-          </div>
+            {/* Quick Stats Grid */}
+            {!isSidebarCollapsed ? (
+              <div className="space-y-3">
+                <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider px-2">Quick Stats</span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="bg-cozy-card p-3.5 rounded-xl border-2 border-cozy-text-dark shadow-sm">
+                    <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Total Logs</p>
+                    <p className="text-xl font-black text-cozy-text-dark mt-1">{entries.length}</p>
+                  </div>
+                  <div className="bg-cozy-card p-3.5 rounded-xl border-2 border-cozy-text-dark shadow-sm">
+                    <p className="text-[9px] text-cozy-text-muted font-bold uppercase tracking-wider">Daily Streak</p>
+                    <p className="text-xl font-black text-cozy-text-dark mt-1">{user?.streak || 0}d 🔥</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 bg-cozy-card border-2 border-cozy-text-dark rounded-xl p-2 shadow-sm" title="Quick Stats">
+                <span className="text-xs">🔥</span>
+                <span className="text-[10px] font-black">{user?.streak || 0}d</span>
+              </div>
+            )}
 
-        </aside>
+            {/* Active Premium Member widget */}
+            {!isSidebarCollapsed ? (
+              <div className="mt-auto bg-cozy-yellow/30 border-2 border-cozy-text-dark rounded-2xl p-4">
+                <div className="flex items-center gap-1.5 text-[10px] font-black text-cozy-accent uppercase tracking-wider mb-1">
+                  <Crown size={12} fill="currentColor" />
+                  <span>Premium Member</span>
+                </div>
+                <p className="text-[11px] text-cozy-text-dark font-semibold leading-normal">
+                  Cloud backups & AI speech synthesizing are active.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-auto bg-cozy-yellow/30 border-2 border-cozy-text-dark rounded-xl p-2.5 flex items-center justify-center cursor-help" title="Premium Member Active">
+                <Crown size={14} fill="currentColor" className="text-cozy-accent animate-pulse" />
+              </div>
+            )}
+
+          </aside>
 
         {/* ACTIVE WORKSPACE AREA */}
-        <main className="flex-1 flex flex-col min-h-[calc(100vh-4rem)] max-w-full lg:max-w-[calc(100vw-18rem)] xl:max-w-[calc(100vw-18rem-20rem)] bg-cozy-bg relative overflow-y-auto">
+        <main className={`flex-1 flex flex-col min-h-[calc(100vh-4rem)] max-w-full transition-all duration-300 ${
+          isSidebarCollapsed 
+            ? 'lg:max-w-[calc(100vw-5rem)]' 
+            : 'lg:max-w-[calc(100vw-18rem)]'
+        } bg-cozy-bg relative overflow-y-auto`}>
           
           <AnimatePresence mode="wait">
             {isRecordingOverlayActive ? (
@@ -632,12 +701,38 @@ export default function App() {
                     onUpdateEntry={handleUpdateEntry}
                     autoSelectEntryId={autoSelectEntryId}
                     onClearAutoSelect={() => setAutoSelectEntryId(null)}
+                    onCreateEntry={handleCreateJournalPage}
+                    selectedEntry={selectedEntry}
+                    onSelectEntry={setSelectedEntry}
+                    onUpdateControls={setTimelineControls}
+                    onViewOnCalendar={(date) => {
+                      setCalendarTargetDate(date);
+                      setCurrentTab('analytics');
+                    }}
                   />
                 )}
 
                 {currentTab === 'analytics' && (
                   <MoodAnalytics 
                     entries={entries}
+                    initialSelectedDate={calendarTargetDate}
+                    onNavigateToEntry={(id) => {
+                      const matched = entries.find(e => e.id === id);
+                      if (matched) {
+                        setSelectedEntry(matched);
+                        setAutoSelectEntryId(id);
+                        setCurrentTab('timeline');
+                      }
+                    }}
+                    onCreatePageForDate={(date) => {
+                      handleCreateJournalPage(date);
+                    }}
+                    onSaveConvertedEntry={(newPage) => {
+                      setEntries(prev => [newPage, ...prev]);
+                      setSelectedEntry(newPage);
+                      setAutoSelectEntryId(newPage.id);
+                      setCurrentTab('timeline');
+                    }}
                   />
                 )}
 
@@ -651,10 +746,18 @@ export default function App() {
                   <ProfilePage 
                     userName={user.name}
                     userEmail={user.email}
+                    userAvatar={user.avatarEmoji}
+                    userBio={user.bio}
+                    userAvatarBg={user.avatarBg}
                     isPremium={user.isPremium}
                     onTogglePremium={handleTogglePremium}
+                    onUpdateProfile={(updates) => {
+                      setUser(prev => prev ? { ...prev, ...updates } : null);
+                    }}
                     entries={entries}
                     badges={badges}
+                    goals={goals}
+                    habits={habits}
                     onLogout={handleLogout}
                   />
                 )}
@@ -664,78 +767,7 @@ export default function App() {
 
         </main>
 
-        {/* DESKTOP RIGHT-SIDE GLANCE (visible on lg screens) */}
-        <aside className="hidden xl:flex w-80 border-l-3 border-cozy-text-dark p-6 flex-col gap-6 bg-cozy-bg shrink-0">
-          
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-xs font-black text-cozy-text-muted uppercase tracking-widest">Personal Analytics</h3>
-            <span className="text-[10px] font-black text-cozy-green bg-emerald-50 px-2 py-0.5 rounded-full border-2 border-cozy-green">
-              +4% week
-            </span>
-          </div>
 
-          <div className="space-y-5">
-            {/* Health Mini Bar Chart Card */}
-            <div className="bg-cozy-card p-5 rounded-2xl border-2 border-cozy-text-dark shadow-sm">
-              <div className="flex justify-between items-end mb-4">
-                <div>
-                  <div className="text-[9px] text-cozy-text-muted mb-1 font-black uppercase tracking-wider">Emotional Health</div>
-                  <div className="text-2xl font-black text-cozy-text-dark">88%</div>
-                </div>
-              </div>
-              
-              {/* Sleek bar-charts mockup */}
-              <div className="flex items-end gap-2.5 h-12 pt-1">
-                <div className="flex-1 bg-cozy-bg border border-cozy-text-dark h-[40%] rounded-md hover:bg-cozy-orange/20 transition cursor-help" title="Mon: 40%" />
-                <div className="flex-1 bg-cozy-bg border border-cozy-text-dark h-[60%] rounded-md hover:bg-cozy-orange/20 transition cursor-help" title="Tue: 60%" />
-                <div className="flex-1 bg-cozy-bg border border-cozy-text-dark h-[55%] rounded-md hover:bg-cozy-orange/20 transition cursor-help" title="Wed: 55%" />
-                <div className="flex-1 bg-cozy-orange border-2 border-cozy-text-dark h-[85%] rounded-md" title="Thu: 85%" />
-                <div className="flex-1 bg-cozy-yellow border-2 border-cozy-text-dark h-[75%] rounded-md" title="Fri: 75%" />
-                <div className="flex-1 bg-cozy-orange border-2 border-cozy-text-dark h-[95%] rounded-md animate-pulse" title="Sat: 95% (Peak!)" />
-                <div className="flex-1 bg-cozy-orange border-2 border-cozy-text-dark h-[88%] rounded-md" title="Sun: 88%" />
-              </div>
-            </div>
-
-            {/* Recent Observations */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-cozy-text-muted uppercase tracking-widest px-1">Recent Observations</h4>
-              
-              <div className="space-y-3">
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-cozy-orange mt-1.5 shrink-0 border border-cozy-text-dark" />
-                  <p className="text-xs text-cozy-text-dark leading-relaxed font-semibold">
-                    You mention <span className="text-cozy-accent font-black">books</span> and <span className="text-cozy-accent font-black">novels</span> frequently this month.
-                  </p>
-                </div>
-                
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-cozy-yellow mt-1.5 shrink-0 border border-cozy-text-dark" />
-                  <p className="text-xs text-cozy-text-dark leading-relaxed font-semibold">
-                    Stress levels peak during <span className="text-cozy-accent font-black">startup reviews</span> or exams.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-cozy-green mt-1.5 shrink-0 border border-cozy-text-dark" />
-                  <p className="text-xs text-cozy-text-dark leading-relaxed font-semibold">
-                    Happiness correlates with <span className="text-cozy-accent font-black">morning meditation</span> and outdoor gym runs.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <div className="mt-auto">
-            <button
-              onClick={() => setCurrentTab('analytics')}
-              className="w-full py-3.5 bg-cozy-orange hover:bg-cozy-accent text-white rounded-xl font-black text-xs border-2 border-cozy-text-dark shadow-sm uppercase tracking-wider transition"
-            >
-              View Full Report
-            </button>
-          </div>
-
-        </aside>
 
       </div>
 
@@ -766,7 +798,7 @@ export default function App() {
             currentTab === 'timeline' ? 'text-cozy-orange' : 'text-cozy-text-muted hover:text-cozy-text-dark'
           }`}
         >
-          <Calendar size={20} className={currentTab === 'timeline' ? 'stroke-[2.5]' : 'stroke-2'} />
+          <FileText size={20} className={currentTab === 'timeline' ? 'stroke-[2.5]' : 'stroke-2'} />
           <span className="text-[9px] font-black uppercase tracking-tight">Journal</span>
           {entries.length > 0 && (
             <span className="absolute -top-1 -right-2 bg-cozy-orange text-[8px] font-black px-1.5 py-0.5 rounded-full text-white border border-cozy-text-dark shadow-sm animate-bounce">
@@ -785,8 +817,8 @@ export default function App() {
             currentTab === 'analytics' ? 'text-cozy-orange' : 'text-cozy-text-muted hover:text-cozy-text-dark'
           }`}
         >
-          <TrendingUp size={20} className={currentTab === 'analytics' ? 'stroke-[2.5]' : 'stroke-2'} />
-          <span className="text-[9px] font-black uppercase tracking-tight">Insights</span>
+          <Calendar size={20} className={currentTab === 'analytics' ? 'stroke-[2.5]' : 'stroke-2'} />
+          <span className="text-[9px] font-black uppercase tracking-tight">Calendar</span>
         </button>
 
         {/* Tab 5: AI Coach */}

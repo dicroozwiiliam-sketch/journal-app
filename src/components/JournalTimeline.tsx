@@ -5,10 +5,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Calendar, Clock, Smile, Trash2, Edit3, Volume2, Share2, FileText, ChevronLeft, ArrowLeftRight, Sparkles, AlertCircle, List, CheckSquare, Mic, Image, Play, Square, Edit, Edit2, Plus, ChevronUp, ChevronDown, Compass, BookOpen, Copy, Check, X } from 'lucide-react';
+import { Search, Calendar, Clock, Smile, Trash2, Edit3, Volume2, Share2, FileText, ChevronLeft, ArrowLeftRight, Sparkles, AlertCircle, List, CheckSquare, Mic, Image, Play, Square, Edit, Edit2, Plus, ChevronUp, ChevronDown, Compass, BookOpen, Copy, Check, X, PenTool } from 'lucide-react';
 import { JournalEntry } from '../types';
 import NotionBlockEditor from './NotionBlockEditor';
 import FloatingCanvas, { FloatingObject } from './FloatingCanvas';
+import JournalToolsPanel from './JournalToolsPanel';
 
 export interface JournalBlock {
   id: string;
@@ -29,7 +30,8 @@ export interface JournalBlock {
     | 'audio'
     | 'video'
     | 'table'
-    | 'sketch'; // 'sketch' from template fallback
+    | 'sketch'
+    | 'file'; // 'sketch' from template fallback
   content: string;
   completed?: boolean;
   indent?: number;
@@ -43,6 +45,11 @@ interface JournalTimelineProps {
   onUpdateEntry: (entry: JournalEntry) => void;
   autoSelectEntryId?: string | null;
   onClearAutoSelect?: () => void;
+  onCreateEntry?: () => void;
+  selectedEntry?: JournalEntry | null;
+  onSelectEntry?: (entry: JournalEntry | null) => void;
+  onUpdateControls?: (controls: any) => void;
+  onViewOnCalendar?: (date: Date) => void;
 }
 
 export default function JournalTimeline({ 
@@ -50,11 +57,25 @@ export default function JournalTimeline({
   onDeleteEntry, 
   onUpdateEntry,
   autoSelectEntryId,
-  onClearAutoSelect
+  onClearAutoSelect,
+  onCreateEntry,
+  selectedEntry: propSelectedEntry,
+  onSelectEntry: propOnSelectEntry,
+  onUpdateControls,
+  onViewOnCalendar
 }: JournalTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'All' | 'Today' | 'Week' | 'Month' | 'Year'>('All');
-  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
+  const [localSelectedEntry, setLocalSelectedEntry] = useState<JournalEntry | null>(null);
+
+  const selectedEntry = propSelectedEntry !== undefined ? propSelectedEntry : localSelectedEntry;
+  const setSelectedEntry = (entry: JournalEntry | null) => {
+    if (propOnSelectEntry) {
+      propOnSelectEntry(entry);
+    } else {
+      setLocalSelectedEntry(entry);
+    }
+  };
 
   // Auto-select newly created pages
   useEffect(() => {
@@ -79,11 +100,17 @@ export default function JournalTimeline({
   // Notion Block Editor states
   const [blocks, setBlocks] = useState<JournalBlock[]>([]);
   const [floatingObjects, setFloatingObjects] = useState<FloatingObject[]>([]);
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco'>('text');
+  const [canvasActions, setCanvasActions] = useState<any>(null);
   const lastLoadedEntryIdRef = useRef<string | null>(null);
   const [slashCommandBlockId, setSlashCommandBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
 
   // Floating Navigator States
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
@@ -325,6 +352,59 @@ export default function JournalTimeline({
     setSelectedEntry(updatedEntry);
     onUpdateEntry(updatedEntry);
   };
+
+  const handleAddFloatingObject = (
+    type: 'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'decorative' | 'file',
+    content: string,
+    color = '#EF9A7A',
+    meta: any = {}
+  ) => {
+    const newObj: FloatingObject = {
+      id: `obj-${Date.now()}`,
+      type,
+      x: 15 + Math.random() * 40,
+      y: 15 + Math.random() * 40,
+      width: type === 'sticker' ? 140 : type === 'emoji' ? 50 : type === 'sticky' ? 120 : 100,
+      height: type === 'sticker' ? 60 : type === 'emoji' ? 50 : type === 'sticky' ? 120 : 100,
+      rotation: Math.floor(Math.random() * 20) - 10,
+      opacity: 1.0,
+      zIndex: floatingObjects.length + 1,
+      isLocked: false,
+      content,
+      color,
+      meta
+    };
+    const updated = [...floatingObjects, newObj];
+    handleUpdateFloatingObjects(updated);
+    showToast(`Added ${type} component to canvas! 🎨`);
+  };
+
+  const stats = getWritingStats();
+
+  useEffect(() => {
+    if (selectedEntry && onUpdateControls) {
+      onUpdateControls({
+        appendBlock: handleAppendBlock,
+        addFloatingObject: handleAddFloatingObject,
+        copyFullText: handleCopyFullText,
+        speak: () => speakText(selectedEntry),
+        isSpeaking,
+        wordCount: stats.wordCount,
+        charCount: stats.charCount,
+        readingTime: stats.readingTime,
+        blockCount: stats.blockCount,
+        selectedObjectId,
+        onSelectObject: setSelectedObjectId,
+        activeTab,
+        setActiveTab,
+        canvasActions,
+        floatingObjects,
+        updateFloatingObjects: handleUpdateFloatingObjects
+      });
+    } else if (onUpdateControls) {
+      onUpdateControls(null);
+    }
+  }, [selectedEntry, blocks, floatingObjects, isSpeaking, onUpdateControls, selectedObjectId, activeTab, canvasActions]);
 
   const handleUpdateBlocks = (updatedBlocks: JournalBlock[]) => {
     if (!selectedEntry) return;
@@ -696,7 +776,7 @@ export default function JournalTimeline({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8" id="journal_tab">
+    <div className="w-full max-w-6xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8" id="journal_tab">
       
       <AnimatePresence mode="wait">
         {!selectedEntry ? (
@@ -728,20 +808,32 @@ export default function JournalTimeline({
             </div>
  
             {/* Date Filters Row */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {(['All', 'Today', 'Week', 'Month', 'Year'] as const).map((type) => (
+            <div className="flex gap-2 items-center overflow-x-auto pb-1 justify-between">
+              <div className="flex gap-2 overflow-x-auto">
+                {(['All', 'Today', 'Week', 'Month', 'Year'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-2 transition shrink-0 ${
+                      filterType === type 
+                        ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
+                        : 'bg-cozy-card text-cozy-text-muted border-cozy-text-dark hover:text-cozy-text-dark'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              {onCreateEntry && (
                 <button
-                  key={type}
-                  onClick={() => setFilterType(type)}
-                  className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-2 transition shrink-0 ${
-                    filterType === type 
-                      ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                      : 'bg-cozy-card text-cozy-text-muted border-cozy-text-dark hover:text-cozy-text-dark'
-                  }`}
+                  onClick={onCreateEntry}
+                  className="bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl px-4 py-2 shadow-md hover:scale-105 active:scale-95 transition-all flex items-center shrink-0 cursor-pointer"
+                  id="float_create_journal_btn"
                 >
-                  {type}
+                  <span>+ Journal</span>
                 </button>
-              ))}
+              )}
             </div>
  
             {/* Timeline Cards */}
@@ -779,7 +871,72 @@ export default function JournalTimeline({
                           <Clock size={11} />
                           <span>{formatTime(entry.duration)}</span>
                         </div>
-                        <span className="text-sm">{entry.moodEmoji}</span>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === entry.id ? null : entry.id);
+                            }}
+                            className="p-1 hover:bg-[#FDF8F1] hover:text-cozy-orange text-cozy-text-muted rounded-lg transition duration-150 font-black flex items-center justify-center text-sm cursor-pointer border border-transparent hover:border-cozy-border"
+                            style={{ minWidth: '24px', minHeight: '24px' }}
+                            title="Options"
+                          >
+                            ...
+                          </button>
+                          {activeDropdownId === entry.id && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-10 cursor-default" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDropdownId(null);
+                                }}
+                              />
+                              <div className="absolute right-0 top-7 bg-white border-2 border-cozy-text-dark rounded-xl shadow-lg p-1.5 z-20 min-w-[100px] text-left">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdownId(null);
+                                    setSelectedEntry(entry);
+                                    setEditedText(entry.transcript);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 hover:bg-[#FDF8F1] text-cozy-text-dark hover:text-cozy-orange font-bold text-xs rounded-lg flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <Edit size={12} className="text-cozy-orange" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdownId(null);
+                                    setEntryToDelete(entry);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 hover:bg-rose-50 text-rose-600 font-bold text-xs rounded-lg flex items-center gap-2 transition cursor-pointer"
+                                >
+                                  <Trash2 size={12} className="text-rose-500" />
+                                  <span>Delete</span>
+                                </button>
+                                {onViewOnCalendar && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdownId(null);
+                                      onViewOnCalendar(new Date(entry.date));
+                                    }}
+                                    className="w-full text-left px-2.5 py-1.5 hover:bg-[#FAF6EB] text-cozy-text-dark hover:text-cozy-orange font-bold text-xs rounded-lg flex items-center gap-2 transition cursor-pointer border-t border-[#4A3D30]/5 mt-1 pt-1.5"
+                                  >
+                                    <Calendar size={12} className="text-cozy-orange" />
+                                    <span>View on Calendar</span>
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
  
                       {/* Summary Text */}
@@ -858,29 +1015,48 @@ export default function JournalTimeline({
               </div>
             )}
 
-            {/* Minimalist Floating Back Button (outside document flow) */}
-            <div className="absolute top-4 left-4 md:-left-14 lg:-left-20 z-30">
+            {/* Minimalist Floating Back Button & Calendar Button (outside document flow) */}
+            <div className="absolute top-4 left-4 md:-left-14 lg:-left-20 z-30 flex gap-2">
               <button
                 onClick={() => {
                   stopSpeaking();
                   setSelectedEntry(null);
                   setIsEditing(false);
                 }}
-                className="p-2 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl flex items-center justify-center text-cozy-text-dark shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer"
+                className="p-2 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl flex items-center justify-center text-cozy-text-dark shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer animate-fade-in"
                 title="Back to Timeline"
               >
                 <ChevronLeft size={18} strokeWidth={2.5} />
               </button>
+              
+              {onViewOnCalendar && selectedEntry && (
+                <button
+                  onClick={() => {
+                    stopSpeaking();
+                    onViewOnCalendar(new Date(selectedEntry.date));
+                  }}
+                  className="px-3.5 py-2 bg-white hover:bg-[#FAF6EB] border-2 border-cozy-text-dark rounded-xl flex items-center gap-2 text-xs font-black text-cozy-text-dark shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer font-mono uppercase tracking-wider animate-fade-in"
+                  title="View this entry's date on the Calendar"
+                >
+                  <Calendar size={14} className="text-cozy-orange" />
+                  <span className="hidden sm:inline">View on Calendar</span>
+                </button>
+              )}
             </div>
 
 
 
-            <div className="max-w-2xl mx-auto w-full space-y-8 pt-14 md:pt-0 relative">
+            <div className="max-w-5xl mx-auto w-full space-y-8 pt-14 md:pt-0 relative">
               {/* Floating Craft decorations overlay canvas */}
               <FloatingCanvas 
                 floatingObjects={floatingObjects}
                 onChange={handleUpdateFloatingObjects}
                 showToast={showToast}
+                selectedObjectId={selectedObjectId}
+                onSelectObject={setSelectedObjectId}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                registerActions={setCanvasActions}
               />
 
               {/* INTERACTIVE NOTION BLOCK CANVAS */}
@@ -893,12 +1069,49 @@ export default function JournalTimeline({
               </div>
               
 
+              {/* PAGE TOOLS REMOVED */}
+
             </div>
 
 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Timeline Entry Delete Confirmation Modal */}
+      {entryToDelete && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white border-2 border-cozy-text-dark rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-rose-50 border-2 border-rose-200 text-rose-500 flex items-center justify-center mx-auto mb-4 text-xl flex items-center justify-center">
+              ⚠️
+            </div>
+            <h3 className="text-base font-black text-cozy-text-dark mb-1">Delete Entry?</h3>
+            <p className="text-xs text-cozy-text-muted leading-relaxed mb-6 font-bold">
+              Are you sure you want to permanently delete this Notion journal page? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setEntryToDelete(null)}
+                className="px-4 py-2 bg-cozy-bg border border-[#E2D1C3] hover:bg-[#FDF8F1] text-cozy-text-dark text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const idToDelete = entryToDelete.id;
+                  setEntryToDelete(null);
+                  stopSpeaking();
+                  onDeleteEntry(idToDelete);
+                  showToast("Deleted entry 🗑️");
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

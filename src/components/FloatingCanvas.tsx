@@ -10,12 +10,13 @@ import {
   Square, Circle, Triangle, ArrowRight, Star, Heart, Undo, Redo, 
   Trash2, Copy, Lock, Unlock, ArrowUp, ArrowDown, Scissors, Check, X,
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight,
-  ChevronDown, Type as TypeIcon, Eye, Edit, List, Quote, HelpCircle
+  ChevronDown, Type as TypeIcon, Eye, Edit, List, Quote, HelpCircle,
+  FileText, FileDown
 } from 'lucide-react';
 
 export interface FloatingObject {
   id: string;
-  type: 'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'decorative';
+  type: 'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'decorative' | 'file';
   x: number; // percentage left
   y: number; // percentage top
   width: number;
@@ -49,6 +50,19 @@ interface FloatingCanvasProps {
   floatingObjects: FloatingObject[];
   onChange: (updated: FloatingObject[]) => void;
   showToast: (msg: string) => void;
+  selectedObjectId?: string | null;
+  onSelectObject?: (id: string | null) => void;
+  activeTab?: 'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco';
+  setActiveTab?: (tab: 'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco') => void;
+  registerActions?: (actions: {
+    spawnObject: (type: FloatingObject['type'], customFields?: Partial<FloatingObject>) => void;
+    updateTextMeta: (id: string, key: string, val: any) => void;
+    handleUndo: () => void;
+    handleRedo: () => void;
+    undoStackLength: number;
+    redoStackLength: number;
+    clearAll: () => void;
+  }) => void;
 }
 
 // Preset Stickers
@@ -76,11 +90,28 @@ const PRESET_IMAGES = [
 export default function FloatingCanvas({
   floatingObjects = [],
   onChange,
-  showToast
+  showToast,
+  selectedObjectId: propSelectedObjectId,
+  onSelectObject: propOnSelectObject,
+  activeTab: propActiveTab,
+  setActiveTab: propSetActiveTab,
+  registerActions
 }: FloatingCanvasProps) {
   const [isToolsOpen, setIsToolsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'deco'>('text');
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [localActiveTab, setLocalActiveTab] = useState<'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco'>('text');
+  const [localSelectedObjectId, setLocalSelectedObjectId] = useState<string | null>(null);
+
+  const selectedObjectId = propSelectedObjectId !== undefined ? propSelectedObjectId : localSelectedObjectId;
+  const setSelectedObjectId = (id: string | null) => {
+    if (propOnSelectObject) propOnSelectObject(id);
+    else setLocalSelectedObjectId(id);
+  };
+
+  const activeTab = propActiveTab !== undefined ? propActiveTab : localActiveTab;
+  const setActiveTab = (tab: 'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco') => {
+    if (propSetActiveTab) propSetActiveTab(tab);
+    else setLocalActiveTab(tab);
+  };
   
   // Undo / Redo Stacks
   const [undoStack, setUndoStack] = useState<FloatingObject[][]>([]);
@@ -462,6 +493,24 @@ export default function FloatingCanvas({
     saveState(updated);
   };
 
+  useEffect(() => {
+    if (registerActions) {
+      registerActions({
+        spawnObject,
+        updateTextMeta,
+        handleUndo,
+        handleRedo,
+        undoStackLength: undoStack.length,
+        redoStackLength: redoStack.length,
+        clearAll: () => {
+          saveState([]);
+          setSelectedObjectId(null);
+          showToast("Cleared all scrap decorations! 🧹");
+        }
+      });
+    }
+  }, [floatingObjects, undoStack, redoStack, selectedObjectId, activeTab]);
+
   return (
     <>
       {/* 1. FLOATING OBJECTS CANVAS LAYER (Rendered inline inside relative paper wrapper) */}
@@ -693,6 +742,31 @@ export default function FloatingCanvas({
                     pattern={obj.meta?.washiPattern}
                   />
                 )}
+
+                {/* 9. FILE ATTACHMENTS */}
+                {obj.type === 'file' && (
+                  <div className="w-full h-full bg-[#FDFDFD] border-2 border-dashed border-[#E2D1C3] p-3 rounded-2xl flex items-center justify-between gap-2 font-sans shadow-sm select-none">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="w-8 h-8 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="text-[10px] font-bold text-cozy-text-dark truncate">{obj.content}</div>
+                        <div className="text-[8px] text-cozy-text-muted font-mono uppercase truncate">{obj.color || 'Document'}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showToast(`Downloading: ${obj.content} 📂`);
+                      }}
+                      className="p-1.5 hover:bg-[#FDF8F1] rounded-lg text-cozy-text-muted hover:text-cozy-text-dark border border-[#E2D1C3]/60 transition cursor-pointer shrink-0"
+                      title="Download"
+                    >
+                      <FileDown size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Interactive Resize Handle (Bottom-Right) */}
@@ -760,7 +834,7 @@ export default function FloatingCanvas({
 
                 {/* Toolbox Navigation Tab Slots */}
                 <div className="flex gap-1 overflow-x-auto pb-2 border-b border-cozy-text-dark/10 scrollbar-none mb-3 shrink-0">
-                  {(['text', 'emoji', 'sticker', 'sticky', 'image', 'draw', 'shape', 'deco'] as const).map(tab => (
+                  {(['text', 'sticky', 'emoji', 'image', 'shape', 'deco'] as const).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
@@ -930,60 +1004,82 @@ export default function FloatingCanvas({
                     </div>
                   )}
 
-                  {/* STICKERS TAB */}
-                  {activeTab === 'sticker' && (
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-bold text-cozy-text-muted">CREATIVE VINTAGE STICKERS</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {PRESET_STICKERS.map(sticker => (
-                          <button
-                            key={sticker.id}
-                            onClick={() => spawnObject('sticker', {
-                              content: sticker.emoji,
-                              color: sticker.color,
-                              meta: { stickerType: sticker.text }
-                            })}
-                            className="p-2 border-2 border-cozy-text-dark rounded-xl flex items-center gap-2 transition hover:scale-102 active:scale-98 cursor-pointer shadow-xs text-left"
-                            style={{ backgroundColor: `${sticker.color}25` }}
-                          >
-                            <span className="text-xl bg-white p-1 rounded-lg border border-cozy-text-dark/10">{sticker.emoji}</span>
-                            <div className="overflow-hidden">
-                              <div className="text-[10px] font-black text-cozy-text-dark truncate leading-tight">{sticker.label}</div>
-                              <div className="text-[8px] font-bold text-cozy-text-muted truncate uppercase tracking-widest">{sticker.text}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* STICKY NOTES TAB */}
                   {activeTab === 'sticky' && (
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-bold text-cozy-text-muted">PINNED MEMO NOTES</p>
-                      
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {[
-                          { color: '#FFF59D', label: 'Classic Yellow' },
-                          { color: '#FFD1DC', label: 'Soft Pink' },
-                          { color: '#E8F5E9', label: 'Pastel Green' },
-                          { color: '#E3F2FD', label: 'Sky Blue' },
-                          { color: '#F3E5F5', label: 'Lilac Purple' },
-                          { color: '#FFF3E0', label: 'Apricot' }
-                        ].map(st => (
-                          <button
-                            key={st.color}
-                            onClick={() => spawnObject('sticky', {
-                              color: st.color,
-                              content: 'Remember to smile today! 😊'
-                            })}
-                            className="p-2 border-2 border-cozy-text-dark rounded-xl text-center cursor-pointer transition hover:scale-105 active:scale-95"
-                            style={{ backgroundColor: st.color }}
-                          >
-                            <div className="text-[9px] font-black text-cozy-text-dark truncate">{st.label}</div>
-                          </button>
-                        ))}
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-cozy-text-muted mb-2">ADD A DECORATIVE STICKY NOTE</p>
+                        <button
+                          onClick={() => spawnObject('sticky', {
+                            content: '',
+                            color: '#FFF59D',
+                          })}
+                          className="w-full py-2.5 bg-cozy-orange hover:bg-opacity-90 text-white font-black text-xs border-2 border-cozy-text-dark rounded-xl flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                        >
+                          <StickyNote size={14} />
+                          <span>Insert Cozy Sticky Note</span>
+                        </button>
                       </div>
+
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-cozy-text-muted uppercase">Sticky Note Color Presets</p>
+                        <div className="grid grid-cols-6 gap-2">
+                          {[
+                            { name: 'Yellow', code: '#FFF59D' },
+                            { name: 'Orange', code: '#FFCC80' },
+                            { name: 'Mint', code: '#C8E6C9' },
+                            { name: 'Sky', code: '#B3E5FC' },
+                            { name: 'Lavender', code: '#E1BEE7' },
+                            { name: 'Pink', code: '#F8BBD0' }
+                          ].map(colorPreset => {
+                            const isCurrentSelected = activeObj && activeObj.type === 'sticky' && activeObj.color === colorPreset.code;
+                            return (
+                              <button
+                                key={colorPreset.code}
+                                onClick={() => {
+                                  if (activeObj && activeObj.type === 'sticky') {
+                                    const updated = floatingObjects.map(o => o.id === activeObj.id ? { ...o, color: colorPreset.code } : o);
+                                    onChange(updated);
+                                    showToast(`Changed sticky color to ${colorPreset.name}! 🎨`);
+                                  } else {
+                                    spawnObject('sticky', {
+                                      content: '',
+                                      color: colorPreset.code
+                                    });
+                                  }
+                                }}
+                                className="w-8 h-8 rounded-lg border-2 border-cozy-text-dark shadow-xs hover:scale-110 active:scale-95 transition cursor-pointer flex items-center justify-center relative"
+                                style={{ backgroundColor: colorPreset.code }}
+                                title={`Use ${colorPreset.name} Sticky`}
+                              >
+                                {isCurrentSelected && <Check size={12} className="text-cozy-text-dark stroke-[3px]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {activeObj && activeObj.type === 'sticky' ? (
+                        <div className="p-3 bg-cozy-bg/50 border border-cozy-text-dark/20 rounded-xl space-y-2">
+                          <p className="text-[9px] font-black text-cozy-orange uppercase tracking-wider">Format Selected Sticky Note</p>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[8px] font-bold text-cozy-text-muted shrink-0">Custom Color</label>
+                            <input
+                              type="color"
+                              value={activeObj.color || '#FFF59D'}
+                              onChange={(e) => {
+                                const updated = floatingObjects.map(o => o.id === activeObj.id ? { ...o, color: e.target.value } : o);
+                                onChange(updated);
+                              }}
+                              className="w-full h-6 rounded cursor-pointer border p-0.5"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-cozy-text-muted italic text-center py-2 bg-cozy-bg/40 rounded-xl border">
+                          Tip: Tap or drag your sticky note to write thoughts directly! 📝
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1034,28 +1130,6 @@ export default function FloatingCanvas({
                           ))}
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* DRAW TAB */}
-                  {activeTab === 'draw' && (
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-bold text-cozy-text-muted">FLOATING DOODLE CANVAS</p>
-                      
-                      <button
-                        onClick={() => spawnObject('draw', {
-                          width: 300,
-                          height: 220,
-                          content: ''
-                        })}
-                        className="w-full py-2.5 bg-cozy-orange text-white font-black text-xs border-2 border-cozy-text-dark rounded-xl flex items-center justify-center gap-2 shadow-sm cursor-pointer hover:bg-opacity-95"
-                      >
-                        <Paintbrush size={14} />
-                        <span>Add Drawing Board</span>
-                      </button>
-                      <p className="text-[9px] text-cozy-text-muted leading-relaxed font-bold">
-                        Spawns a drawing canvas! Select brush colors and draw custom whimsical lines, flower sketches, or arrows directly inside the box!
-                      </p>
                     </div>
                   )}
 

@@ -16,6 +16,24 @@ import {
 } from 'lucide-react';
 import { WavingCatIllustration } from './illustrations';
 
+const REFLECTION_PROMPTS = [
+  "What is one thing that made you smile today, even if it was small?",
+  "What is a personal boundary you set or maintained recently?",
+  "If you could give your morning self one gentle piece of advice, what would it be?",
+  "What felt effortless today, and what required more energy than expected?",
+  "How did you practice self-care or slow down today?",
+  "What is something you learned about yourself during a challenging moment this week?",
+  "What are you most looking forward to in the coming days?",
+  "Is there a thought or worry you'd like to release before going to sleep?",
+  "Which sensory experience today (a sound, taste, touch) brought you comfort?",
+  "Who is someone you felt connected to today, and why?",
+  "What is one small victory or milestone you achieved today?",
+  "How did today's environment affect your emotional flow and focus?",
+  "What is a simple pleasure you enjoyed today that you often take for granted?",
+  "If today was a chapter in a book, what would the title be?",
+  "In what ways did you show kindness to yourself or others today?"
+];
+
 interface RealTimeDashboardProps {
   userName: string;
   isWritingMode: boolean;
@@ -68,6 +86,13 @@ export default function RealTimeDashboard({
     return 'Reflecting before rest prepares your mind for tomorrow. Nestle up nicely!';
   };
 
+  const getDailyPrompt = () => {
+    // Determine daily prompt stably by counting days since epoch
+    const daysSinceEpoch = Math.floor(currentTime.getTime() / (1000 * 60 * 60 * 24));
+    const index = daysSinceEpoch % REFLECTION_PROMPTS.length;
+    return REFLECTION_PROMPTS[index];
+  };
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -80,11 +105,11 @@ export default function RealTimeDashboard({
   return (
     <div className="p-4 md:p-8 flex flex-col space-y-6 max-w-4xl mx-auto" id="realtime_dashboard">
       
-      {/* 1. Header Bento Section: Dynamic Welcome & Cozy System Clock */}
+      {/* 1. Header Bento Section: Dynamic Welcome, Daily Prompt, & Cozy System Clock */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         
         {/* Dynamic Welcome Card */}
-        <div className="md:col-span-2 bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] cozy-shadow">
+        <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between min-h-[150px] cozy-shadow">
           <div className="absolute top-0 right-0 w-32 h-32 bg-cozy-yellow/20 rounded-full blur-2xl pointer-events-none" />
           
           <div>
@@ -92,22 +117,47 @@ export default function RealTimeDashboard({
               <Sparkles size={12} className="animate-pulse text-cozy-orange" />
               <span>Cozy Nest Core</span>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-cozy-text-dark capitalize">
+            <h1 className="text-xl font-black tracking-tight text-cozy-text-dark capitalize">
               {getGreeting()}, {userName.split(' ')[0]}! ✨
             </h1>
-            <p className="text-xs font-semibold text-cozy-text-muted leading-relaxed mt-2 pr-4">
+            <p className="text-[11px] font-semibold text-cozy-text-muted leading-relaxed mt-1.5">
               {getGreetingMessage()}
             </p>
           </div>
 
-          <div className="text-[11px] font-bold text-cozy-green mt-4 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-cozy-green border-2 border-cozy-text-dark shrink-0 animate-pulse" />
-            <span>Active Reflection Core ready for inputs</span>
+          <div className="text-[10px] font-bold text-cozy-green mt-3 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-cozy-green border border-cozy-text-dark shrink-0 animate-pulse" />
+            <span>Nest core ready</span>
           </div>
         </div>
 
+        {/* Daily Reflection Prompt Card */}
+        <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between min-h-[150px] cozy-shadow">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-cozy-orange/10 rounded-full blur-xl pointer-events-none" />
+          
+          <div>
+            <div className="flex items-center gap-1.5 text-[10px] font-black text-cozy-orange uppercase tracking-widest mb-1">
+              <Sparkles size={12} className="animate-pulse text-cozy-accent" />
+              <span>Daily Reflection Prompt</span>
+            </div>
+            <h2 className="text-xs font-bold text-cozy-text-dark leading-relaxed mt-1 italic">
+              "{getDailyPrompt()}"
+            </h2>
+          </div>
+
+          <button
+            onClick={() => {
+              setIsWritingMode(true);
+              onStartRecording();
+            }}
+            className="self-start text-[10px] font-black text-cozy-orange hover:text-cozy-accent uppercase tracking-wider mt-3 flex items-center gap-1"
+          >
+            <span>Write Reflection →</span>
+          </button>
+        </div>
+
         {/* Cozy Clock Card */}
-        <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-5 flex flex-col justify-between min-h-[140px] relative overflow-hidden cozy-shadow">
+        <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-5 flex flex-col justify-between min-h-[150px] relative overflow-hidden cozy-shadow">
           <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-cozy-orange/10 rounded-full blur-xl pointer-events-none" />
           
           <div className="flex items-center justify-between">
@@ -121,7 +171,7 @@ export default function RealTimeDashboard({
           </div>
 
           <div className="my-2">
-            <div className="text-3xl font-black tracking-tight text-cozy-text-dark flex items-baseline gap-1">
+            <div className="text-2xl font-black tracking-tight text-cozy-text-dark flex items-baseline gap-1">
               {currentTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
               <span className="text-sm text-cozy-orange font-bold select-none animate-pulse">:</span>
               <span className="text-lg text-cozy-text-muted font-bold">

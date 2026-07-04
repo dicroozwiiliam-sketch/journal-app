@@ -9,11 +9,15 @@ import {
   Copy, 
   Trash, 
   Columns, 
-  Maximize2, 
-  Menu,
-  ChevronDown,
-  ChevronUp,
-  RotateCcw
+  ChevronDown, 
+  ChevronUp, 
+  RotateCcw,
+  Type,
+  Hash,
+  Star,
+  CheckSquare,
+  Check,
+  Calculator
 } from 'lucide-react';
 import { JournalBlock } from './JournalTimeline';
 
@@ -39,6 +43,10 @@ export default function TableBlock({
   const cols = meta.cols || [];
   const colWidths = meta.colWidths || Array(cols.length).fill(120);
 
+  // Read Column Types & Calculations
+  const colTypes = meta.colTypes || Array(cols.length).fill('text');
+  const colCalculations = meta.colCalculations || {};
+
   // Active sorting config
   const [sortConfig, setSortConfig] = useState<{ colIndex: number; direction: 'asc' | 'desc' } | null>(null);
 
@@ -52,14 +60,44 @@ export default function TableBlock({
   const resizeStartWidthRef = useRef<number>(0);
   const [isResizing, setIsResizing] = useState<boolean>(false);
 
-  // Update table columns & rows
-  const updateTableData = (newCols: string[], newRows: string[][], newWidths?: number[]) => {
+  // Column type selection dropdown
+  const [activeTypeDropdown, setActiveTypeDropdown] = useState<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Confirmation state for clearing cells
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setActiveTypeDropdown(null);
+      }
+    }
+    if (activeTypeDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeTypeDropdown]);
+
+  // Update table columns & rows & meta attributes
+  const updateTableData = (
+    newCols: string[], 
+    newRows: string[][], 
+    newWidths?: number[],
+    newTypes?: string[],
+    newCalcs?: Record<number, string>
+  ) => {
     onUpdate(block.id, {
       meta: {
         ...meta,
         cols: newCols,
         rows: newRows,
-        colWidths: newWidths || colWidths
+        colWidths: newWidths || colWidths,
+        colTypes: newTypes || colTypes,
+        colCalculations: newCalcs || colCalculations
       }
     });
   };
@@ -69,7 +107,7 @@ export default function TableBlock({
     const newRow = Array(cols.length).fill('');
     const updatedRows = [...rows, newRow];
     updateTableData(cols, updatedRows);
-    showToast("Added new row");
+    showToast("Added new row ✨");
   };
 
   // Insert row at specific index
@@ -78,18 +116,18 @@ export default function TableBlock({
     const updatedRows = [...rows];
     updatedRows.splice(rIdx, 0, newRow);
     updateTableData(cols, updatedRows);
-    showToast(`Inserted row at line ${rIdx + 1}`);
+    showToast(`Inserted row at line ${rIdx + 1} 📝`);
   };
 
   // Delete row by index
   const deleteRow = (rIdx: number) => {
     if (rows.length <= 1) {
-      showToast("Cannot delete the last remaining row");
+      showToast("Cannot delete the last remaining row ⚠️");
       return;
     }
     const updatedRows = rows.filter((_: any, idx: number) => idx !== rIdx);
     updateTableData(cols, updatedRows);
-    showToast("Deleted row");
+    showToast("Deleted row 🗑️");
   };
 
   // Add a new column at the end
@@ -98,21 +136,29 @@ export default function TableBlock({
     const newCols = [...cols, `Column ${nextColNum}`];
     const updatedRows = rows.map((r: string[]) => [...r, '']);
     const updatedWidths = [...colWidths, 120];
-    updateTableData(newCols, updatedRows, updatedWidths);
-    showToast("Added new column");
+    const nextTypes = [...colTypes, 'text'];
+
+    updateTableData(newCols, updatedRows, updatedWidths, nextTypes);
+    showToast("Added new column 📊");
   };
 
   // Delete column by index
   const deleteColumn = (cIdx: number) => {
     if (cols.length <= 1) {
-      showToast("Cannot delete the last remaining column");
+      showToast("Cannot delete the last remaining column ⚠️");
       return;
     }
     const newCols = cols.filter((_: any, idx: number) => idx !== cIdx);
     const updatedRows = rows.map((r: string[]) => r.filter((_: any, idx: number) => idx !== cIdx));
     const updatedWidths = colWidths.filter((_: any, idx: number) => idx !== cIdx);
-    updateTableData(newCols, updatedRows, updatedWidths);
-    showToast("Deleted column");
+    
+    // Filter column types and calculations
+    const nextTypes = colTypes.filter((_: any, idx: number) => idx !== cIdx);
+    const nextCalcs = { ...colCalculations };
+    delete nextCalcs[cIdx];
+
+    updateTableData(newCols, updatedRows, updatedWidths, nextTypes, nextCalcs);
+    showToast("Deleted column 🗑️");
   };
 
   // Handle cell edit change
@@ -125,7 +171,7 @@ export default function TableBlock({
       }
       return r;
     });
-    // Direct edit updates block state natively
+    
     onUpdate(block.id, {
       meta: {
         ...meta,
@@ -146,6 +192,41 @@ export default function TableBlock({
     });
   };
 
+  // Handle column type change
+  const handleColTypeChange = (cIdx: number, type: 'text' | 'number' | 'rating' | 'checkbox') => {
+    const nextTypes = [...colTypes];
+    while (nextTypes.length < cols.length) {
+      nextTypes.push('text');
+    }
+    nextTypes[cIdx] = type;
+
+    // Convert values appropriately
+    const nextRows = rows.map((row: string[]) => {
+      const nextRow = [...row];
+      if (type === 'checkbox') {
+        const isTrue = row[cIdx] === 'true' || row[cIdx] === 'checked' || row[cIdx] === 'yes' || row[cIdx] === '1';
+        nextRow[cIdx] = isTrue ? 'true' : 'false';
+      } else if (type === 'rating') {
+        const val = parseInt(row[cIdx], 10);
+        if (isNaN(val) || val < 0 || val > 5) {
+          nextRow[cIdx] = '0';
+        } else {
+          nextRow[cIdx] = String(val);
+        }
+      }
+      return nextRow;
+    });
+
+    onUpdate(block.id, {
+      meta: {
+        ...meta,
+        colTypes: nextTypes,
+        rows: nextRows
+      }
+    });
+    showToast(`Column set to ${type.toUpperCase()}`);
+  };
+
   // Perform Column sorting
   const handleSort = (cIdx: number) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -153,9 +234,8 @@ export default function TableBlock({
       if (sortConfig.direction === 'asc') {
         direction = 'desc';
       } else {
-        // Reset sort
         setSortConfig(null);
-        showToast("Table sort cleared");
+        showToast("Table sort cleared 🧹");
         return;
       }
     }
@@ -184,7 +264,7 @@ export default function TableBlock({
         rows: sortedRows
       }
     });
-    showToast(`Sorted table by ${cols[cIdx]} (${direction.toUpperCase()})`);
+    showToast(`Sorted by ${cols[cIdx]} (${direction.toUpperCase()}) ↕️`);
   };
 
   // Drag listeners for Column Resizing
@@ -229,27 +309,58 @@ export default function TableBlock({
     };
   }, [isResizing, colWidths]);
 
-  // Fill up widths array if not present or inconsistent
+  // Fill up widths array and types array if not present or inconsistent
   useEffect(() => {
+    let changed = false;
+    const nextMeta = { ...meta };
+
     if (!colWidths || colWidths.length !== cols.length) {
-      const defaults = Array(cols.length).fill(120);
-      onUpdate(block.id, {
-        meta: {
-          ...meta,
-          colWidths: defaults
-        }
-      });
+      nextMeta.colWidths = Array(cols.length).fill(120);
+      changed = true;
+    }
+    if (!meta.colTypes || meta.colTypes.length !== cols.length) {
+      nextMeta.colTypes = Array(cols.length).fill('text');
+      changed = true;
+    }
+
+    if (changed) {
+      onUpdate(block.id, { meta: nextMeta });
     }
   }, [cols.length]);
 
+  // Math calculation helper
+  const calculateValue = (cIdx: number, calcType: string) => {
+    const values = rows
+      .map((r: string[]) => parseFloat(r[cIdx]))
+      .filter((v: number) => !isNaN(v));
+      
+    if (values.length === 0) return '-';
+    
+    if (calcType === 'sum') {
+      const sum = values.reduce((acc: number, curr: number) => acc + curr, 0);
+      return Number(sum.toFixed(2));
+    }
+    if (calcType === 'avg') {
+      const sum = values.reduce((acc: number, curr: number) => acc + curr, 0);
+      return Number((sum / values.length).toFixed(2));
+    }
+    if (calcType === 'min') {
+      return Math.min(...values);
+    }
+    if (calcType === 'max') {
+      return Math.max(...values);
+    }
+    return '';
+  };
+
   return (
-    <div className="w-full bg-white border border-[#E2D1C3] p-4 sm:p-5 rounded-2xl shadow-xs font-sans space-y-4">
+    <div className="w-full bg-white border-2 border-cozy-border p-4 sm:p-5 rounded-3xl shadow-xs font-sans space-y-4">
       
       {/* Table Header toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#E2D1C3]/40">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-cozy-border/40">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-[#D28C5C]/10 text-[#D28C5C] rounded-lg">
-            <Table2 size={15} />
+          <div className="p-2 bg-[#D28C5C]/10 text-cozy-orange rounded-xl">
+            <Table2 size={16} />
           </div>
           <div>
             <span className="text-xs font-black text-cozy-text-dark tracking-wide uppercase">Table Grid Sheet</span>
@@ -258,11 +369,39 @@ export default function TableBlock({
         </div>
 
         {/* Global actions */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {confirmClear ? (
+            <button
+              type="button"
+              onClick={() => {
+                const clearedRows = rows.map((r: string[]) => Array(cols.length).fill(''));
+                updateTableData(cols, clearedRows);
+                setConfirmClear(false);
+                showToast("Cleared all table cells 🧼");
+              }}
+              onMouseLeave={() => setTimeout(() => setConfirmClear(false), 3000)}
+              className="px-2.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+              title="Confirm clearing all cell contents"
+            >
+              <Trash size={11} />
+              <span>Confirm Clear?</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmClear(true)}
+              className="px-2.5 py-1.5 bg-[#FDF8F1] border border-rose-200 hover:bg-rose-50/50 text-rose-500 rounded-xl text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+              title="Empty all cell contents"
+            >
+              <RotateCcw size={11} />
+              <span>Clear Cells</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={addColumn}
-            className="px-2.5 py-1.5 bg-[#FDF8F1] border border-[#E2D1C3] hover:border-[#D28C5C] hover:bg-white rounded-lg text-[10px] font-bold text-[#D28C5C] transition flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-[#FDF8F1] border border-cozy-border hover:border-cozy-orange hover:bg-white rounded-xl text-[10px] font-bold text-cozy-text-dark hover:text-cozy-orange transition flex items-center gap-1 cursor-pointer"
             title="Append column to far-right"
           >
             <Columns size={11} />
@@ -272,19 +411,19 @@ export default function TableBlock({
           <button
             type="button"
             onClick={addRow}
-            className="px-2.5 py-1.5 bg-cozy-orange hover:bg-cozy-orange-hover text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-cozy-orange hover:bg-cozy-orange-hover text-white rounded-xl text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
             title="Append row to bottom"
           >
             <Plus size={11} />
             <span>+ Add Row</span>
           </button>
 
-          <div className="h-5 w-[1px] bg-[#E2D1C3]/60 mx-1" />
+          <div className="h-5 w-[1px] bg-cozy-border/60 mx-1" />
 
           <button
             type="button"
             onClick={() => onDuplicate(index)}
-            className="p-1.5 text-cozy-text-muted hover:text-[#D28C5C] hover:bg-[#FDF8F1] rounded-lg transition"
+            className="p-1.5 text-cozy-text-muted hover:text-cozy-orange hover:bg-[#FDF8F1] rounded-lg transition cursor-pointer"
             title="Duplicate Block"
           >
             <Copy size={13} />
@@ -292,7 +431,7 @@ export default function TableBlock({
           <button
             type="button"
             onClick={() => onDelete(block.id)}
-            className="p-1.5 text-cozy-text-muted hover:text-rose-500 hover:bg-rose-50 rounded-lg transition"
+            className="p-1.5 text-cozy-text-muted hover:text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
             title="Delete Block"
           >
             <Trash2 size={13} />
@@ -301,13 +440,13 @@ export default function TableBlock({
       </div>
 
       {/* Spreadsheet grid scrollable viewport */}
-      <div className="overflow-x-auto border border-[#E2D1C3]/60 rounded-xl bg-[#FDF8F1]/10">
+      <div className="overflow-x-auto border-2 border-cozy-border rounded-2xl bg-cozy-bg/10 relative">
         <table className="w-full text-xs border-collapse table-fixed select-text">
           <thead>
-            <tr className="bg-[#FDF8F1] border-b border-[#E2D1C3]/70">
+            <tr className="bg-cozy-bg/50 border-b-2 border-cozy-border">
               
               {/* Extra index column for row deletion / insertions */}
-              <th className="w-10 text-center p-1.5 border-r border-[#E2D1C3]/60 select-none">
+              <th className="w-10 text-center p-1.5 border-r border-cozy-border select-none bg-cozy-bg/30">
                 <span className="text-[9px] font-mono text-cozy-text-muted">#</span>
               </th>
 
@@ -316,30 +455,46 @@ export default function TableBlock({
                 const width = colWidths[cIdx] || 120;
                 const isSorted = sortConfig?.colIndex === cIdx;
                 const sortDir = sortConfig?.direction;
+                
+                const type = colTypes[cIdx] || 'text';
+                let typeIcon = <Type size={11} className="text-cozy-text-muted" />;
+                if (type === 'number') typeIcon = <Hash size={11} className="text-amber-600 font-bold" />;
+                if (type === 'rating') typeIcon = <Star size={11} className="text-cozy-yellow fill-cozy-yellow" />;
+                if (type === 'checkbox') typeIcon = <CheckSquare size={11} className="text-cozy-green" />;
 
                 return (
                   <th 
                     key={cIdx} 
                     style={{ width: `${width}px` }}
-                    className="relative p-2 border-r border-[#E2D1C3]/60 font-bold text-cozy-text-dark text-left group/th min-w-[70px] select-none"
+                    className="relative p-2 border-r border-cozy-border font-bold text-cozy-text-dark text-left group/th min-w-[80px] select-none"
                     onMouseEnter={() => setHoveredColIndex(cIdx)}
                     onMouseLeave={() => setHoveredColIndex(null)}
                   >
                     <div className="flex items-center justify-between gap-1 w-full">
-                      <input
-                        type="text"
-                        value={col}
-                        onChange={(e) => handleHeaderChange(cIdx, e.target.value)}
-                        className="w-full bg-transparent border-none font-extrabold text-cozy-text-dark focus:outline-none focus:ring-0 text-xs py-0.5"
-                        title="Double click to edit column name"
-                      />
+                      <div className="flex items-center gap-1 flex-1 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTypeDropdown(activeTypeDropdown === cIdx ? null : cIdx)}
+                          className="p-1 rounded bg-white hover:bg-cozy-orange/10 border border-cozy-border transition cursor-pointer flex items-center justify-center shrink-0"
+                          title="Click to change column data type"
+                        >
+                          {typeIcon}
+                        </button>
+                        <input
+                          type="text"
+                          value={col}
+                          onChange={(e) => handleHeaderChange(cIdx, e.target.value)}
+                          className="w-full bg-transparent border-none font-extrabold text-cozy-text-dark focus:outline-none focus:ring-0 text-xs py-0.5"
+                          title="Double click to edit column name"
+                        />
+                      </div>
                       
                       {/* Interactive Header utilities: Sort & Delete */}
                       <div className="flex items-center gap-0.5 opacity-0 group-hover/th:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleSort(cIdx)}
-                          className={`p-0.5 rounded hover:bg-cozy-orange/20 transition ${
+                          className={`p-1 rounded hover:bg-cozy-orange/20 transition cursor-pointer ${
                             isSorted ? 'text-cozy-orange font-bold' : 'text-cozy-text-muted'
                           }`}
                           title="Sort table by column values"
@@ -355,7 +510,7 @@ export default function TableBlock({
                           <button
                             type="button"
                             onClick={() => deleteColumn(cIdx)}
-                            className="p-0.5 rounded text-rose-500 hover:bg-rose-50 transition"
+                            className="p-1 rounded text-rose-500 hover:bg-rose-50 transition cursor-pointer"
                             title="Delete Column"
                           >
                             <Trash size={10} />
@@ -367,9 +522,65 @@ export default function TableBlock({
                     {/* Draggable boundary resize handle */}
                     <div 
                       onMouseDown={(e) => handleResizeStart(e, cIdx)}
-                      className="absolute right-0 top-0 bottom-0 w-[4px] cursor-col-resize hover:bg-[#D28C5C]/55 active:bg-[#D28C5C] transition-all z-10"
+                      className="absolute right-0 top-0 bottom-0 w-[4px] cursor-col-resize hover:bg-cozy-orange/50 active:bg-cozy-orange transition-all z-10"
                       title="Drag to resize column"
                     />
+
+                    {/* Column Type Select Dropdown popover */}
+                    {activeTypeDropdown === cIdx && (
+                      <div 
+                        ref={dropdownRef}
+                        className="absolute top-10 left-2 bg-white border-2 border-cozy-border rounded-2xl shadow-md p-1.5 z-30 min-w-[140px] text-xs font-medium space-y-0.5 text-cozy-text-dark text-left"
+                      >
+                        <div className="text-[9px] uppercase tracking-wider text-cozy-text-muted font-bold px-2 py-1 select-none">
+                          Column Type
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleColTypeChange(cIdx, 'text');
+                            setActiveTypeDropdown(null);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center gap-2 hover:bg-cozy-orange/10 transition cursor-pointer ${type === 'text' ? 'bg-cozy-orange/15 text-cozy-text-dark font-black' : ''}`}
+                        >
+                          <Type size={11} className="text-cozy-text-muted" />
+                          <span>Text</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleColTypeChange(cIdx, 'number');
+                            setActiveTypeDropdown(null);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center gap-2 hover:bg-cozy-orange/10 transition cursor-pointer ${type === 'number' ? 'bg-cozy-orange/15 text-cozy-text-dark font-black' : ''}`}
+                        >
+                          <Hash size={11} className="text-amber-600" />
+                          <span>Number</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleColTypeChange(cIdx, 'rating');
+                            setActiveTypeDropdown(null);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center gap-2 hover:bg-cozy-orange/10 transition cursor-pointer ${type === 'rating' ? 'bg-cozy-orange/15 text-cozy-text-dark font-black' : ''}`}
+                        >
+                          <Star size={11} className="text-cozy-yellow fill-cozy-yellow" />
+                          <span>Rating Stars</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleColTypeChange(cIdx, 'checkbox');
+                            setActiveTypeDropdown(null);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center gap-2 hover:bg-cozy-orange/10 transition cursor-pointer ${type === 'checkbox' ? 'bg-cozy-orange/15 text-cozy-text-dark font-black' : ''}`}
+                        >
+                          <CheckSquare size={11} className="text-cozy-green" />
+                          <span>Checkbox</span>
+                        </button>
+                      </div>
+                    )}
                   </th>
                 );
               })}
@@ -379,38 +590,38 @@ export default function TableBlock({
             {rows.map((row: string[], rIdx: number) => (
               <tr 
                 key={rIdx} 
-                className="border-b border-[#E2D1C3]/30 last:border-b-0 hover:bg-[#FDF8F1]/20 transition-colors group/tr"
+                className="border-b border-cozy-border/40 last:border-b-0 hover:bg-cozy-bg/20 transition-colors group/tr"
                 onMouseEnter={() => setHoveredRowIndex(rIdx)}
                 onMouseLeave={() => setHoveredRowIndex(null)}
               >
                 {/* Index & row actions td */}
-                <td className="p-1.5 border-r border-[#E2D1C3]/30 bg-[#FDF8F1]/30 text-center select-none relative">
+                <td className="p-1 border-r border-cozy-border/60 bg-cozy-bg/10 text-center select-none relative h-[36px]">
                   {hoveredRowIndex === rIdx ? (
-                    <div className="absolute inset-0 flex items-center justify-center gap-0.5 bg-white/90">
+                    <div className="absolute inset-0 flex items-center justify-center gap-0.5 bg-white/95">
                       <button
                         type="button"
                         onClick={() => insertRowAt(rIdx)}
-                        className="p-0.5 rounded hover:bg-[#FDF8F1] text-cozy-orange transition"
+                        className="p-0.5 rounded hover:bg-cozy-orange/10 text-cozy-orange transition cursor-pointer"
                         title="Insert row above"
                       >
-                        <ChevronUp size={10} />
+                        <ChevronUp size={11} />
                       </button>
                       <button
                         type="button"
                         onClick={() => insertRowAt(rIdx + 1)}
-                        className="p-0.5 rounded hover:bg-[#FDF8F1] text-cozy-orange transition"
+                        className="p-0.5 rounded hover:bg-cozy-orange/10 text-cozy-orange transition cursor-pointer"
                         title="Insert row below"
                       >
-                        <ChevronDown size={10} />
+                        <ChevronDown size={11} />
                       </button>
                       {rows.length > 1 && (
                         <button
                           type="button"
                           onClick={() => deleteRow(rIdx)}
-                          className="p-0.5 rounded hover:bg-rose-50 text-rose-500 transition"
+                          className="p-0.5 rounded hover:bg-rose-50 text-rose-500 transition cursor-pointer"
                           title="Delete row"
                         >
-                          <Trash size={9} />
+                          <Trash size={10} />
                         </button>
                       )}
                     </div>
@@ -419,24 +630,139 @@ export default function TableBlock({
                   )}
                 </td>
 
-                {/* Grid values inputs */}
-                {row.map((cell: string, cIdx: number) => (
-                  <td 
-                    key={cIdx} 
-                    className="p-1 border-r border-[#E2D1C3]/30"
-                  >
-                    <input
-                      type="text"
-                      value={cell}
-                      onChange={(e) => handleCellChange(rIdx, cIdx, e.target.value)}
-                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-cozy-text-dark text-xs px-1.5 py-1"
-                      placeholder="..."
-                    />
-                  </td>
-                ))}
+                {/* Grid values inputs based on dynamic type */}
+                {row.map((cell: string, cIdx: number) => {
+                  const type = colTypes[cIdx] || 'text';
+
+                  return (
+                    <td 
+                      key={cIdx} 
+                      className="p-1 border-r border-cozy-border/40 align-middle"
+                    >
+                      {type === 'rating' ? (
+                        (() => {
+                          const ratingVal = parseInt(cell, 10) || 0;
+                          return (
+                            <div className="flex items-center justify-center gap-0.5 py-1">
+                              {[1, 2, 3, 4, 5].map((starNum) => (
+                                <button
+                                  key={starNum}
+                                  type="button"
+                                  onClick={() => {
+                                    const newVal = ratingVal === starNum ? 0 : starNum;
+                                    handleCellChange(rIdx, cIdx, String(newVal));
+                                  }}
+                                  className="text-amber-400 hover:scale-125 transition cursor-pointer"
+                                >
+                                  <Star 
+                                    size={13} 
+                                    fill={starNum <= ratingVal ? '#F6D285' : 'transparent'} 
+                                    className={starNum <= ratingVal ? 'text-cozy-yellow' : 'text-cozy-text-muted/30'}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      ) : type === 'checkbox' ? (
+                        (() => {
+                          const isChecked = cell === 'true';
+                          return (
+                            <div className="flex items-center justify-center py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCellChange(rIdx, cIdx, isChecked ? 'false' : 'true');
+                                }}
+                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition cursor-pointer ${
+                                  isChecked 
+                                    ? 'bg-cozy-orange border-cozy-orange text-white' 
+                                    : 'border-cozy-text-dark/20 hover:border-cozy-orange bg-white'
+                                }`}
+                              >
+                                {isChecked && <Check size={12} className="stroke-[3.5]" />}
+                              </button>
+                            </div>
+                          );
+                        })()
+                      ) : type === 'number' ? (
+                        <input
+                          type="text"
+                          value={cell}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                              handleCellChange(rIdx, cIdx, val);
+                            }
+                          }}
+                          placeholder="0"
+                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-cozy-text-dark text-xs px-1.5 py-1 text-right font-mono"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={cell}
+                          onChange={(e) => handleCellChange(rIdx, cIdx, e.target.value)}
+                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-cozy-text-dark text-xs px-1.5 py-1"
+                          placeholder="..."
+                        />
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
+
+          {/* Table Footer with quick aggregate options */}
+          <tfoot>
+            <tr className="bg-cozy-bg/10 border-t-2 border-cozy-border">
+              <td className="p-1 border-r border-cozy-border select-none bg-cozy-bg/30 text-center">
+                <span className="font-mono text-[9px] font-bold text-cozy-text-muted">∑</span>
+              </td>
+              {cols.map((col: string, cIdx: number) => {
+                const type = colTypes[cIdx] || 'text';
+                const calcType = colCalculations[cIdx] || 'none';
+
+                if (type !== 'number') {
+                  return (
+                    <td key={cIdx} className="p-1 border-r border-cozy-border/40 bg-cozy-bg/5" />
+                  );
+                }
+
+                return (
+                  <td key={cIdx} className="p-1 border-r border-cozy-border/40 font-mono text-[10px] text-right text-cozy-text-muted bg-cozy-bg/10 align-middle">
+                    <div className="flex items-center justify-end gap-1 px-1 group/footer relative">
+                      {calcType !== 'none' && (
+                        <span className="font-black text-[#D28C5C] text-[10px] uppercase mr-1">
+                          {calcType}: {calculateValue(cIdx, calcType)}
+                        </span>
+                      )}
+                      <select
+                        value={calcType}
+                        onChange={(e) => {
+                          const nextCalcs = { ...colCalculations, [cIdx]: e.target.value };
+                          onUpdate(block.id, {
+                            meta: {
+                              ...meta,
+                              colCalculations: nextCalcs
+                            }
+                          });
+                        }}
+                        className="bg-white border border-cozy-border rounded-lg px-1 py-0.5 text-[9px] font-sans font-bold text-cozy-text-dark cursor-pointer hover:border-cozy-orange focus:outline-none"
+                      >
+                        <option value="none">Calculate</option>
+                        <option value="sum">Sum</option>
+                        <option value="avg">Avg</option>
+                        <option value="min">Min</option>
+                        <option value="max">Max</option>
+                      </select>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -450,13 +776,12 @@ export default function TableBlock({
           <button
             onClick={() => {
               setSortConfig(null);
-              // Simply refresh state
-              showToast("Sorting reset");
+              showToast("Sorting reset 🧹");
             }}
-            className="text-cozy-orange font-bold hover:underline flex items-center gap-0.5"
+            className="text-cozy-orange font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
           >
             <RotateCcw size={9} />
-            <span>Reset original sorting</span>
+            <span>Reset sorting</span>
           </button>
         )}
       </div>

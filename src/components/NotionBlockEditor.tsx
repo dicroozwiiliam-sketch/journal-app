@@ -9,8 +9,9 @@ import {
   Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, GripVertical, 
   Copy, Check, Undo2, Redo2, CornerDownRight, Play, Square, Volume2,
   Image as ImageIcon, Sparkles, FileText, Link as LinkIcon, 
-  Table2, AlertCircle, Smile, HelpCircle, FileDown, ExternalLink,
-  ChevronLast, Layers, List, CheckSquare, Mic, Edit, ListOrdered, Edit2, PlusCircle
+  Table2, AlertCircle, Smile, HelpCircle, FileDown, ExternalLink, Paperclip,
+  ChevronLast, Layers, List, CheckSquare, Mic, Edit, ListOrdered, Edit2, PlusCircle,
+  Youtube, Upload, Video, RefreshCw, X, Music, Headphones
 } from 'lucide-react';
 import { JournalBlock } from './JournalTimeline';
 import VoiceBlock from './VoiceBlock';
@@ -233,6 +234,67 @@ export function BlockContentEditable({
   );
 }
 
+function getYouTubeEmbedId(url: string): string {
+  if (!url) return '';
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : '';
+}
+
+const localVideoFilesCache: Record<string, string> = {};
+const localAudioFilesCache: Record<string, string> = {};
+
+function getMusicEmbedUrl(url: string): { embedUrl: string; provider: 'spotify' | 'apple' | 'soundcloud' | 'direct' | 'unknown' } {
+  if (!url) return { embedUrl: '', provider: 'unknown' };
+  
+  // Spotify
+  if (url.includes('spotify.com')) {
+    const match = url.match(/spotify\.com\/(embed\/)?(track|playlist|album|artist|show|episode)\/([a-zA-Z0-9]+)/);
+    if (match) {
+      const type = match[2];
+      const id = match[3];
+      return {
+        embedUrl: `https://open.spotify.com/embed/${type}/${id}?utm_source=generator`,
+        provider: 'spotify'
+      };
+    }
+  }
+  
+  // Apple Music
+  if (url.includes('music.apple.com')) {
+    let embedUrl = url.replace('music.apple.com', 'embed.music.apple.com');
+    // Ensure embed is in url
+    if (!embedUrl.includes('embed.')) {
+      embedUrl = embedUrl.replace('://music.', '://embed.music.');
+    }
+    return {
+      embedUrl,
+      provider: 'apple'
+    };
+  }
+  
+  // SoundCloud
+  if (url.includes('soundcloud.com')) {
+    return {
+      embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false`,
+      provider: 'soundcloud'
+    };
+  }
+
+  // Direct Audio Extensions or simple URL fallback
+  if (url.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i)) {
+    return {
+      embedUrl: url,
+      provider: 'direct'
+    };
+  }
+
+  return {
+    embedUrl: url,
+    provider: 'unknown'
+  };
+}
+
 interface NotionBlockEditorProps {
   blocks: JournalBlock[];
   onChange: (updatedBlocks: JournalBlock[]) => void;
@@ -278,6 +340,7 @@ export default function NotionBlockEditor({
     { type: 'audio', label: 'Audio sounds', desc: 'Play ambient track lists', icon: <span className="text-xs">♫</span> },
     { type: 'video', label: 'Video player', desc: 'Simulated video progress clip', icon: <span className="text-xs">▶</span> },
     { type: 'table', label: 'Table sheet', desc: 'Editable 2D cell grids', icon: <Table2 size={12} className="text-gray-500" /> },
+    { type: 'file', label: 'Attach File / Document', desc: 'Embed a downloadable PDF, Word, or MP3 file', icon: <Paperclip size={13} className="text-[#96A376]" /> },
   ];
 
   const getFilteredCommands = (query: string) => {
@@ -521,6 +584,32 @@ export default function NotionBlockEditor({
         >
           👤
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            const bIdx = blocks.findIndex(b => b.id === blockId);
+            if (bIdx !== -1) {
+              const newBlock: JournalBlock = {
+                id: `b-file-${Date.now()}`,
+                type: 'file',
+                content: 'Mindfulness_Checklist_Guide.pdf',
+                meta: {
+                  fileName: 'Mindfulness_Checklist_Guide.pdf',
+                  fileType: 'pdf',
+                  fileSize: '2.4 MB'
+                }
+              };
+              const updated = [...blocks];
+              updated.splice(bIdx + 1, 0, newBlock);
+              updateBlocksWithHistory(updated);
+              showToast("Attached PDF Document block below!");
+            }
+          }}
+          className="p-1 hover:bg-[#96A376]/10 rounded text-[#96A376] flex items-center justify-center shrink-0"
+          title="Attach File/Document"
+        >
+          <Paperclip size={13} strokeWidth={2.5} />
+        </button>
         <span className="text-gray-300">|</span>
         <button
           type="button"
@@ -699,15 +788,21 @@ export default function NotionBlockEditor({
         let meta = b.meta;
         if (newType === 'table') {
           meta = {
-            cols: ['Header 1', 'Header 2', 'Header 3'],
+            cols: ['Column 1', 'Column 2', 'Column 3'],
             rows: [
-              ['Row 1, Cell 1', 'Row 1, Cell 2', 'Row 1, Cell 3'],
-              ['Row 2, Cell 1', 'Row 2, Cell 2', 'Row 2, Cell 3'],
+              ['', '', ''],
+              ['', '', ''],
             ]
           };
         } else if (newType === 'gallery' || newType === 'image') {
           meta = {
             urls: []
+          };
+        } else if (newType === 'file') {
+          meta = {
+            fileName: 'Mindfulness_Checklist_Guide.pdf',
+            fileSize: '2.4 MB',
+            fileType: 'pdf'
           };
         }
 
@@ -741,16 +836,23 @@ export default function NotionBlockEditor({
         let meta = undefined;
         if (type === 'table') {
           meta = {
-            cols: ['Item', 'Category', 'Aesthetic Rating'],
+            cols: ['Column 1', 'Column 2', 'Column 3'],
             rows: [
-              ['Hot Match Latte', 'Beverage', '★★★★★'],
-              ['Journal Sketching', 'Activity', '★★★★☆'],
+              ['', '', ''],
+              ['', '', ''],
             ]
           };
         } else if (type === 'gallery' || type === 'image') {
           meta = {
             urls: []
           };
+        } else if (type === 'file') {
+          meta = {
+            fileName: 'Mindfulness_Checklist_Guide.pdf',
+            fileSize: '2.4 MB',
+            fileType: 'pdf'
+          };
+          newContent = newContent || 'Mindfulness_Checklist_Guide.pdf';
         } else if (type === 'quote') {
           newContent = newContent || 'In quietude, the voice finds its nest.';
         }
@@ -1445,7 +1547,7 @@ export default function NotionBlockEditor({
                           </div>
 
                           <div className="max-h-28 overflow-y-auto px-1 py-1 space-y-0.5">
-                            {(['paragraph', 'h1', 'h2', 'h3', 'quote', 'divider', 'bullet', 'number', 'todo', 'toggle', 'gallery', 'voice', 'audio', 'video', 'table'] as const).map(type => (
+                            {(['paragraph', 'h1', 'h2', 'h3', 'quote', 'divider', 'bullet', 'number', 'todo', 'toggle', 'gallery', 'voice', 'audio', 'video', 'table', 'file'] as const).map(type => (
                               <button
                                 key={type}
                                 onClick={() => convertBlockType(index, type)}
@@ -1453,7 +1555,7 @@ export default function NotionBlockEditor({
                                   block.type === type ? 'font-bold bg-[#EF9A7A]/10 text-cozy-orange' : ''
                                 }`}
                               >
-                                {type === 'todo' ? 'Checklist' : type === 'number' ? 'Numbered List' : type}
+                                {type === 'todo' ? 'Checklist' : type === 'number' ? 'Numbered List' : type === 'file' ? 'File Attachment' : type}
                               </button>
                             ))}
                           </div>
@@ -1761,64 +1863,806 @@ export default function NotionBlockEditor({
                 )}
 
                 {/* 18. AUDIO TRACK */}
-                {block.type === 'audio' && (
-                  <div className="relative w-full bg-white border border-[#E2D1C3] p-4 rounded-2xl shadow-xs font-sans space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-cozy-orange/10 flex items-center justify-center text-cozy-orange text-sm font-black">
-                          ♫
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-cozy-text-dark">Ambient Cafe Reflection Track</div>
-                          <div className="text-[10px] text-cozy-text-muted">Soothing focus sounds</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleToggleAudioSimulation(block.id)}
-                        className={`px-3 py-1 text-[10px] rounded-lg font-black tracking-wide border transition ${
-                          isPlayingAudio === block.id 
-                            ? 'bg-rose-50 text-rose-600 border-rose-200' 
-                            : 'bg-[#FDF8F1] text-cozy-text-dark border-[#E2D1C3] hover:bg-cozy-card'
-                        }`}
-                      >
-                        {isPlayingAudio === block.id ? 'Stop Sounds' : 'Play sounds'}
-                      </button>
-                    </div>
+                {block.type === 'audio' && (() => {
+                  const meta = block.meta || {};
+                  const isEditing = meta.isEditing !== false && (!meta.audioSource || meta.isEditing);
+                  const audioSource = meta.audioSource || '';
+                  const activeTab = meta.activeTab || 'spotify';
 
-                    {isPlayingAudio === block.id && (
-                      <div className="bg-[#FDF8F1] border border-[#E2D1C3] rounded-lg p-2.5 flex items-center justify-between gap-3">
-                        <div className="flex-1 bg-gray-200 h-1.5 rounded-full overflow-hidden relative">
-                          <div className="bg-cozy-orange h-full" style={{ width: `${audioProgress}%` }} />
+                  return (
+                    <div className="relative w-full bg-white border-2 border-[#E2D1C3] p-4 rounded-3xl shadow-xs space-y-3 font-sans">
+                      {isEditing ? (
+                        <div className="bg-[#FAF6EB] p-4 border-2 border-dashed border-cozy-text-dark/30 rounded-2xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-cozy-orange flex items-center gap-1.5">
+                              <Music size={14} /> Cozy Music Settings
+                            </span>
+                            {meta.audioSource && (
+                              <button
+                                onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
+                                className="p-1 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer"
+                                title="Close Settings"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Source Type Selector Tabs */}
+                          <div className="grid grid-cols-4 gap-1.5 p-1 bg-cozy-text-dark/5 rounded-xl text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'spotify' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'spotify' ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <Music size={14} />
+                              <span>Spotify</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'other_apps' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'other_apps' ? 'bg-white text-orange-600 shadow-xs border border-orange-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <Headphones size={14} />
+                              <span>SoundCloud</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'upload' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'upload' ? 'bg-white text-blue-600 shadow-xs border border-blue-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <Upload size={14} />
+                              <span>Upload File</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'link' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'link' ? 'bg-white text-violet-600 shadow-xs border border-violet-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <LinkIcon size={14} />
+                              <span>Direct Link</span>
+                            </button>
+                          </div>
+
+                          {/* Tab Contents */}
+                          {activeTab === 'spotify' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Paste a Spotify track, album, playlist, or artist link below to listen directly in your journal.
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="https://open.spotify.com/track/..."
+                                  defaultValue={meta.audioUrl || ''}
+                                  id={`spotify-input-${block.id}`}
+                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.currentTarget;
+                                      const val = input.value;
+                                      const parsed = getMusicEmbedUrl(val);
+                                      if (parsed.provider === 'spotify') {
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            audioSource: 'spotify',
+                                            audioUrl: val,
+                                            embedUrl: parsed.embedUrl,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast('Spotify link embedded successfully! 🎵');
+                                      } else {
+                                        showToast('Please enter a valid Spotify track/album/playlist link ⚠️');
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`spotify-input-${block.id}`) as HTMLInputElement;
+                                    const val = input?.value || '';
+                                    const parsed = getMusicEmbedUrl(val);
+                                    if (parsed.provider === 'spotify') {
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          audioSource: 'spotify',
+                                          audioUrl: val,
+                                          embedUrl: parsed.embedUrl,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast('Spotify link embedded successfully! 🎵');
+                                    } else {
+                                      showToast('Please enter a valid Spotify link ⚠️');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl border border-emerald-700 shadow-xs cursor-pointer"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'other_apps' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Embed an Apple Music or SoundCloud track link to play ambient tunes alongside your journal.
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Apple Music or SoundCloud link..."
+                                  defaultValue={meta.audioUrl || ''}
+                                  id={`other-music-input-${block.id}`}
+                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.currentTarget;
+                                      const val = input.value;
+                                      const parsed = getMusicEmbedUrl(val);
+                                      if (parsed.provider === 'apple' || parsed.provider === 'soundcloud') {
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            audioSource: parsed.provider,
+                                            audioUrl: val,
+                                            embedUrl: parsed.embedUrl,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast(`${parsed.provider === 'apple' ? 'Apple Music' : 'SoundCloud'} link embedded! 🎧`);
+                                      } else {
+                                        showToast('Please enter a valid Apple Music or SoundCloud URL ⚠️');
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`other-music-input-${block.id}`) as HTMLInputElement;
+                                    const val = input?.value || '';
+                                    const parsed = getMusicEmbedUrl(val);
+                                    if (parsed.provider === 'apple' || parsed.provider === 'soundcloud') {
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          audioSource: parsed.provider,
+                                          audioUrl: val,
+                                          embedUrl: parsed.embedUrl,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast(`${parsed.provider === 'apple' ? 'Apple Music' : 'SoundCloud'} link embedded! 🎧`);
+                                    } else {
+                                      showToast('Please enter a valid Apple Music or SoundCloud URL ⚠️');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl border border-orange-700 shadow-xs cursor-pointer"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'upload' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Select or drag a local audio file (MP3, WAV, M4A) from your computer. It is played completely offline.
+                              </p>
+                              <div 
+                                className="border-2 border-dashed border-cozy-text-dark/20 hover:border-cozy-orange/40 bg-white rounded-xl p-4 text-center cursor-pointer transition relative group"
+                                onClick={() => {
+                                  const fileInput = document.getElementById(`audio-file-input-${block.id}`);
+                                  fileInput?.click();
+                                }}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  const file = e.dataTransfer.files?.[0];
+                                  if (file && file.type.startsWith('audio/')) {
+                                    const objUrl = URL.createObjectURL(file);
+                                    localAudioFilesCache[block.id] = objUrl;
+                                    updateBlock(block.id, {
+                                      meta: {
+                                        ...meta,
+                                        audioSource: 'file',
+                                        fileName: file.name,
+                                        isEditing: false
+                                      }
+                                    });
+                                    showToast(`Loaded audio file: ${file.name} 🎧`);
+                                  } else {
+                                    showToast('Please upload a valid audio file ⚠️');
+                                  }
+                                }}
+                              >
+                                <input
+                                  type="file"
+                                  id={`audio-file-input-${block.id}`}
+                                  accept="audio/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const objUrl = URL.createObjectURL(file);
+                                      localAudioFilesCache[block.id] = objUrl;
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          audioSource: 'file',
+                                          fileName: file.name,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast(`Loaded audio file: ${file.name} 🎧`);
+                                    }
+                                  }}
+                                />
+                                <div className="flex flex-col items-center justify-center gap-1.5">
+                                  <Upload className="text-cozy-text-muted group-hover:text-cozy-orange transition" size={24} />
+                                  <span className="text-[11px] font-bold text-cozy-text-dark">
+                                    Click or drag audio file here
+                                  </span>
+                                  <span className="text-[9px] text-cozy-text-muted">
+                                    MP3, WAV, M4A, etc.
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'link' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Enter a direct link to any .mp3, .wav, or .m4a online file to stream inside your page.
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="https://example.com/ambient-forest.mp3"
+                                  defaultValue={meta.audioUrl || ''}
+                                  id={`audio-url-input-${block.id}`}
+                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.currentTarget;
+                                      const val = input.value;
+                                      if (val) {
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            audioSource: 'url',
+                                            audioUrl: val,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast('Direct audio link loaded! 🎵');
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`audio-url-input-${block.id}`) as HTMLInputElement;
+                                    const val = input?.value || '';
+                                    if (val) {
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          audioSource: 'url',
+                                          audioUrl: val,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast('Direct audio link loaded! 🎵');
+                                    } else {
+                                      showToast('Please enter a valid link ⚠️');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-xl border border-violet-700 shadow-xs cursor-pointer"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <span className="text-[9px] font-mono text-cozy-text-muted shrink-0">Progress: {audioProgress}%</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      ) : (
+                        <div className="relative bg-[#FAF6EB] border border-cozy-text-dark/15 p-4 rounded-2xl group/music-player">
+                          {/* Top-right floating edit button */}
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10 opacity-0 group-hover/music-player:opacity-100 transition duration-200">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateBlock(block.id, {
+                                  meta: {
+                                    ...meta,
+                                    isEditing: true
+                                  }
+                                });
+                              }}
+                              className="p-1.5 rounded-lg bg-white hover:bg-cozy-orange/10 text-cozy-text-dark hover:text-cozy-orange shadow-md border border-cozy-text-dark/10 transition cursor-pointer"
+                              title="Change Audio Source"
+                            >
+                              <RefreshCw size={11} className="stroke-[2.5]" />
+                            </button>
+                          </div>
+
+                          {audioSource === 'spotify' && meta.embedUrl ? (
+                            <iframe
+                              src={meta.embedUrl}
+                              className="w-full h-[80px] border-0 rounded-xl"
+                              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                              loading="lazy"
+                              title="Spotify Player"
+                            />
+                          ) : (audioSource === 'apple' || audioSource === 'soundcloud') && meta.embedUrl ? (
+                            <iframe
+                              src={meta.embedUrl}
+                              className={`w-full border-0 rounded-xl ${audioSource === 'soundcloud' ? 'h-[120px]' : 'h-[150px]'}`}
+                              allow="autoplay"
+                              loading="lazy"
+                              title={`${audioSource === 'apple' ? 'Apple Music' : 'SoundCloud'} Player`}
+                            />
+                          ) : audioSource === 'file' ? (
+                            localAudioFilesCache[block.id] ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                    <Headphones size={16} />
+                                  </div>
+                                  <div className="flex-1 overflow-hidden">
+                                    <p className="text-[11px] font-bold text-cozy-text-dark truncate">
+                                      {meta.fileName || 'Uploaded Audio Track'}
+                                    </p>
+                                    <p className="text-[9px] text-cozy-text-muted">Local device file</p>
+                                  </div>
+                                </div>
+                                <audio
+                                  src={localAudioFilesCache[block.id]}
+                                  controls
+                                  className="w-full h-8 outline-none mt-1"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center py-4 bg-white rounded-xl border border-dashed border-cozy-text-dark/20 space-y-2">
+                                <Headphones size={24} className="mx-auto text-cozy-orange animate-pulse" />
+                                <p className="text-xs font-bold text-cozy-text-dark">Local audio path expired</p>
+                                <p className="text-[9px] text-cozy-text-muted max-w-xs mx-auto leading-relaxed">
+                                  Browser privacy rules expire memory-allocated URLs on refresh. Please re-load your audio file.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: true } })}
+                                  className="px-3 py-1 bg-cozy-orange text-white text-[9px] font-black rounded-lg border border-cozy-text-dark cursor-pointer hover:bg-opacity-90"
+                                >
+                                  Re-select File
+                                </button>
+                              </div>
+                            )
+                          ) : audioSource === 'url' && meta.audioUrl ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center">
+                                  <Music size={16} />
+                                </div>
+                                <div className="flex-1 overflow-hidden">
+                                  <p className="text-[11px] font-bold text-cozy-text-dark truncate">
+                                    {meta.audioUrl}
+                                  </p>
+                                  <p className="text-[9px] text-cozy-text-muted">Direct stream link</p>
+                                </div>
+                              </div>
+                              <audio
+                                src={meta.audioUrl}
+                                controls
+                                className="w-full h-8 outline-none mt-1"
+                              />
+                            </div>
+                          ) : (
+                            // Simulation fallback / Initial default cafe track
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-cozy-orange/10 flex items-center justify-center text-cozy-orange text-sm font-black">
+                                  ♫
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-cozy-text-dark">Ambient Cafe Reflection Track</div>
+                                  <div className="text-[10px] text-cozy-text-muted">Soothing focus sounds</div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAudioSimulation(block.id)}
+                                className={`px-3 py-1 text-[10px] rounded-lg font-black tracking-wide border transition ${
+                                  isPlayingAudio === block.id 
+                                    ? 'bg-rose-50 text-rose-600 border-rose-200' 
+                                    : 'bg-white text-cozy-text-dark border-cozy-text-dark/15 hover:bg-cozy-orange/10'
+                                }`}
+                              >
+                                {isPlayingAudio === block.id ? 'Stop Sounds' : 'Play sounds'}
+                              </button>
+                            </div>
+                          )}
+
+                          {!audioSource && isPlayingAudio === block.id && (
+                            <div className="mt-3 bg-white border border-[#E2D1C3] rounded-lg p-2 flex items-center justify-between gap-3">
+                              <div className="flex-1 bg-gray-200 h-1 rounded-full overflow-hidden relative">
+                                <div className="bg-cozy-orange h-full" style={{ width: `${audioProgress}%` }} />
+                              </div>
+                              <span className="text-[9px] font-mono text-cozy-text-muted shrink-0">Progress: {audioProgress}%</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        value={block.content}
+                        onChange={(e) => updateBlockContent(block.id, e.target.value)}
+                        className="w-full text-xs text-cozy-text-muted italic bg-transparent border-none focus:outline-none focus:ring-0 text-center"
+                        placeholder="Add a music track caption..."
+                      />
+                    </div>
+                  );
+                })()}
 
                 {/* 19. VIDEO BLOCK */}
-                {block.type === 'video' && (
-                  <div className="relative w-full bg-white border border-[#E2D1C3] p-4 rounded-2xl shadow-xs space-y-3 font-sans">
-                    <div className="aspect-video bg-neutral-900 rounded-xl overflow-hidden relative flex flex-col justify-end p-3">
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-[#EF9A7A]/90 text-white flex items-center justify-center shadow-lg transform hover:scale-110 transition cursor-pointer">
-                          <Play size={20} fill="currentColor" className="ml-1" />
+                {block.type === 'video' && (() => {
+                  const meta = block.meta || {};
+                  const isEditing = meta.isEditing !== false && (!meta.videoSource || meta.isEditing);
+                  const videoSource = meta.videoSource || '';
+                  const activeTab = meta.activeTab || 'youtube';
+
+                  return (
+                    <div className="relative w-full bg-white border-2 border-[#E2D1C3] p-4 rounded-3xl shadow-xs space-y-3 font-sans">
+                      {isEditing ? (
+                        <div className="bg-[#FAF6EB] p-4 border-2 border-dashed border-cozy-text-dark/30 rounded-2xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-cozy-orange flex items-center gap-1.5">
+                              <Video size={14} /> Video Source Settings
+                            </span>
+                            {meta.videoSource && (
+                              <button
+                                onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
+                                className="p-1 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer"
+                                title="Close Settings"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Source Type Selector Tabs */}
+                          <div className="grid grid-cols-3 gap-1.5 p-1 bg-cozy-text-dark/5 rounded-xl text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'youtube' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'youtube' ? 'bg-white text-rose-600 shadow-xs border border-rose-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <Youtube size={14} />
+                              <span>YouTube</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'upload' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'upload' ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <Upload size={14} />
+                              <span>Upload File</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'url' } })}
+                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
+                                activeTab === 'url' ? 'bg-white text-blue-600 shadow-xs border border-blue-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
+                              }`}
+                            >
+                              <LinkIcon size={14} />
+                              <span>Direct Link</span>
+                            </button>
+                          </div>
+
+                          {/* Tab Contents */}
+                          {activeTab === 'youtube' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Paste any YouTube link below (relaxing music, mindfulness guides, background lofi).
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="https://www.youtube.com/watch?v=..."
+                                  defaultValue={meta.videoUrl || ''}
+                                  id={`yt-input-${block.id}`}
+                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.currentTarget;
+                                      const val = input.value;
+                                      const embedId = getYouTubeEmbedId(val);
+                                      if (embedId) {
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            videoSource: 'youtube',
+                                            videoUrl: val,
+                                            embedId,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast('YouTube video linked successfully! 📺');
+                                      } else {
+                                        showToast('Please enter a valid YouTube video URL ⚠️');
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`yt-input-${block.id}`) as HTMLInputElement;
+                                    const val = input?.value || '';
+                                    const embedId = getYouTubeEmbedId(val);
+                                    if (embedId) {
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          videoSource: 'youtube',
+                                          videoUrl: val,
+                                          embedId,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast('YouTube video linked successfully! 📺');
+                                    } else {
+                                      showToast('Please enter a valid YouTube video URL ⚠️');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl border border-rose-700 shadow-xs cursor-pointer"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'upload' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Select or drag a video file from your computer (MP4, WebM, etc.). Your video is processed purely in-browser.
+                              </p>
+                              <div 
+                                className="border-2 border-dashed border-cozy-text-dark/20 hover:border-cozy-orange/40 bg-white rounded-xl p-4 text-center cursor-pointer transition relative group"
+                                onClick={() => {
+                                  const fileInput = document.getElementById(`file-input-${block.id}`);
+                                  fileInput?.click();
+                                }}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  const file = e.dataTransfer.files?.[0];
+                                  if (file && file.type.startsWith('video/')) {
+                                    const objUrl = URL.createObjectURL(file);
+                                    localVideoFilesCache[block.id] = objUrl;
+                                    updateBlock(block.id, {
+                                      meta: {
+                                        ...meta,
+                                        videoSource: 'file',
+                                        fileName: file.name,
+                                        isEditing: false
+                                      }
+                                    });
+                                    showToast(`Loaded device video: ${file.name} 🎬`);
+                                  } else {
+                                    showToast('Please upload a valid video file ⚠️');
+                                  }
+                                }}
+                              >
+                                <input
+                                  type="file"
+                                  id={`file-input-${block.id}`}
+                                  accept="video/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const objUrl = URL.createObjectURL(file);
+                                      localVideoFilesCache[block.id] = objUrl;
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          videoSource: 'file',
+                                          fileName: file.name,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast(`Loaded device video: ${file.name} 🎬`);
+                                    }
+                                  }}
+                                />
+                                <div className="flex flex-col items-center justify-center gap-1.5">
+                                  <Upload className="text-cozy-text-muted group-hover:text-cozy-orange transition" size={24} />
+                                  <span className="text-[11px] font-bold text-cozy-text-dark">
+                                    Click or drag video file here
+                                  </span>
+                                  <span className="text-[9px] text-cozy-text-muted">
+                                    MP4, WebM, MOV, etc.
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab === 'url' && (
+                            <div className="space-y-3">
+                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
+                                Paste any direct MP4 or other video web link below.
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="https://example.com/relaxing-waves.mp4"
+                                  defaultValue={meta.videoUrl || ''}
+                                  id={`url-input-${block.id}`}
+                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.currentTarget;
+                                      const val = input.value;
+                                      if (val) {
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            videoSource: 'url',
+                                            videoUrl: val,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast('Direct video URL loaded! 🎬');
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`url-input-${block.id}`) as HTMLInputElement;
+                                    const val = input?.value || '';
+                                    if (val) {
+                                      updateBlock(block.id, {
+                                        meta: {
+                                          ...meta,
+                                          videoSource: 'url',
+                                          videoUrl: val,
+                                          isEditing: false
+                                        }
+                                      });
+                                      showToast('Direct video URL loaded! 🎬');
+                                    } else {
+                                      showToast('Please paste a valid video web link ⚠️');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl border border-blue-700 shadow-xs cursor-pointer"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className="w-full bg-white/10 backdrop-blur-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between text-[10px] text-white">
-                        <span>Simulation Frame: Mindful Sunset Walk</span>
-                        <span className="font-mono">03:45</span>
-                      </div>
+                      ) : (
+                        <div className="relative group/player rounded-xl overflow-hidden shadow-sm border border-cozy-text-dark/10">
+                          {/* Top-right floating edit button overlay */}
+                          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10 opacity-0 group-hover/player:opacity-100 transition duration-200">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateBlock(block.id, {
+                                  meta: {
+                                    ...meta,
+                                    isEditing: true
+                                  }
+                                });
+                              }}
+                              className="p-1.5 rounded-lg bg-white/95 hover:bg-white text-cozy-text-dark hover:text-cozy-orange shadow-md border border-cozy-text-dark/15 transition cursor-pointer"
+                              title="Change Video Source"
+                            >
+                              <RefreshCw size={11} className="stroke-[2.5]" />
+                            </button>
+                          </div>
+
+                          {/* Player Container */}
+                          <div className="aspect-video bg-neutral-900 overflow-hidden relative">
+                            {videoSource === 'youtube' && meta.embedId ? (
+                              <iframe
+                                src={`https://www.youtube.com/embed/${meta.embedId}`}
+                                className="absolute inset-0 w-full h-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                title="YouTube Video Player"
+                              />
+                            ) : videoSource === 'file' ? (
+                              localVideoFilesCache[block.id] ? (
+                                <video
+                                  src={localVideoFilesCache[block.id]}
+                                  controls
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="absolute inset-0 bg-neutral-900 flex flex-col items-center justify-center text-center p-4">
+                                  <Video size={32} className="text-cozy-orange mb-2 animate-pulse" />
+                                  <p className="text-xs font-bold text-white mb-1">Local file session inactive</p>
+                                  <p className="text-[10px] text-gray-400 max-w-xs leading-relaxed">
+                                    Browser security policies expire memory paths when reloading the app. Please re-select your file.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: true } })}
+                                    className="mt-3 px-3 py-1.5 bg-cozy-orange text-white text-[10px] font-bold rounded-lg border border-cozy-text-dark cursor-pointer hover:bg-opacity-90"
+                                  >
+                                    Re-select Local File
+                                  </button>
+                                </div>
+                              )
+                            ) : (videoSource === 'url' || videoSource === 'sample') && meta.videoUrl ? (
+                              <video
+                                src={meta.videoUrl}
+                                controls
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+                            ) : (
+                              // Simulation fallback
+                              <div className="absolute inset-0 flex flex-col justify-end p-3 bg-neutral-950">
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: true } })}
+                                    className="w-12 h-12 rounded-full bg-[#EF9A7A]/90 hover:bg-[#EF9A7A] text-white flex items-center justify-center shadow-lg transform hover:scale-110 transition cursor-pointer"
+                                  >
+                                    <Play size={20} fill="currentColor" className="ml-1" />
+                                  </button>
+                                </div>
+                                <div className="w-full bg-white/10 backdrop-blur-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between text-[10px] text-white">
+                                  <span>Simulated: Mindful Sunset Walk</span>
+                                  <span className="font-mono">03:45</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        value={block.content}
+                        onChange={(e) => updateBlockContent(block.id, e.target.value)}
+                        className="w-full text-xs text-cozy-text-muted italic bg-transparent border-none focus:outline-none focus:ring-0 text-center"
+                        placeholder="Add a video caption..."
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={block.content}
-                      onChange={(e) => updateBlockContent(block.id, e.target.value)}
-                      className="w-full text-xs text-cozy-text-muted italic bg-transparent border-none focus:outline-none focus:ring-0 text-center"
-                      placeholder="Add a video caption..."
-                    />
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 22. EDITABLE 2D GRID TABLE */}
                 {block.type === 'table' && block.meta?.rows && (
@@ -1830,6 +2674,75 @@ export default function NotionBlockEditor({
                     onDelete={deleteBlock}
                     showToast={showToast}
                   />
+                )}
+
+                {/* 23. FILE ATTACHMENT BLOCK */}
+                {block.type === 'file' && (
+                  <div className="relative w-full max-w-md bg-[#FDFDFD] border-2 border-dashed border-[#E2D1C3] p-3 rounded-2xl flex items-center justify-between gap-2 font-sans shadow-xs select-none hover:bg-[#FDF8F1]/30 transition group/file">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <div className="w-10 h-10 bg-[#96A376]/10 rounded-xl border border-[#96A376]/30 flex items-center justify-center text-[#96A376] shrink-0">
+                        <FileText size={20} />
+                      </div>
+                      <div className="overflow-hidden">
+                        <input
+                          type="text"
+                          value={block.meta?.fileName || block.content || 'Mindfulness_Checklist_Guide.pdf'}
+                          onChange={(e) => {
+                            const newName = e.target.value;
+                            updateBlock(block.id, {
+                              content: newName,
+                              meta: {
+                                ...(block.meta || {}),
+                                fileName: newName
+                              }
+                            });
+                          }}
+                          className="text-xs font-bold text-cozy-text-dark bg-transparent border-none focus:outline-none focus:ring-0 p-0 truncate w-full"
+                          placeholder="File Name"
+                        />
+                        <div className="text-[9px] text-cozy-text-muted font-mono uppercase truncate">
+                          {block.meta?.fileType || 'pdf'} • {block.meta?.fileSize || '2.4 MB'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const types = ['pdf', 'docx', 'mp3', 'zip'];
+                          const sizes = ['2.4 MB', '1.1 MB', '4.8 MB', '15.2 MB'];
+                          const names = ['Mindfulness_Checklist_Guide.pdf', 'Daily_Reflection_Journal.docx', 'Cozy_Ambient_Sounds.mp3', 'Backup_Archive.zip'];
+                          
+                          const curIdx = types.indexOf(block.meta?.fileType || 'pdf');
+                          const nextIdx = (curIdx + 1) % types.length;
+                          
+                          updateBlock(block.id, {
+                            content: names[nextIdx],
+                            meta: {
+                              fileName: names[nextIdx],
+                              fileType: types[nextIdx],
+                              fileSize: sizes[nextIdx]
+                            }
+                          });
+                          showToast(`Switched file attachment to: ${names[nextIdx]}`);
+                        }}
+                        className="px-2 py-1 bg-[#FDF8F1] hover:bg-white text-cozy-text-muted hover:text-cozy-text-dark border border-[#E2D1C3]/60 rounded-xl transition cursor-pointer text-[10px] font-bold"
+                        title="Change File Preset"
+                      >
+                        Preset
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showToast(`Downloading attachment: ${block.meta?.fileName || block.content} 📂`);
+                        }}
+                        className="p-1.5 hover:bg-[#FDF8F1] rounded-xl text-[#96A376] hover:text-[#96A376]/80 border border-[#E2D1C3]/60 bg-white transition cursor-pointer shrink-0 flex items-center justify-center"
+                        title="Download"
+                      >
+                        <FileDown size={14} />
+                      </button>
+                    </div>
+                  </div>
                 )}
 
 
