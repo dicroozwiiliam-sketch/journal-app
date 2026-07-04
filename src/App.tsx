@@ -26,6 +26,7 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 import { JournalEntry, Goal, Habit, Badge } from './types';
 import Onboarding from './components/Onboarding';
@@ -819,6 +820,7 @@ export default function App() {
 
       </footer>
 
+      <Analytics />
     </div>
   );
 }
