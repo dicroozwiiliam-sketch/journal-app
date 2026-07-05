@@ -25,7 +25,8 @@ import {
   ChevronLeft,
   MessageSquare,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Target
 } from 'lucide-react';
 
 import { JournalEntry, Goal, Habit, Badge } from './types';
@@ -325,16 +326,17 @@ export default function App() {
 
   // Create a blank Notion-like journal page
   const handleCreateJournalPage = (customDate?: Date) => {
+    const isActualDate = customDate instanceof Date && !isNaN(customDate.getTime());
     const newId = `entry-${Date.now()}`;
-    const entryDate = customDate ? customDate.toISOString() : new Date().toISOString();
-    const formattedLabel = customDate ? customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const entryDate = isActualDate ? customDate.toISOString() : new Date().toISOString();
+    const formattedLabel = isActualDate ? customDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
     
     const newPage: JournalEntry = {
       id: newId,
       date: entryDate,
       duration: 0,
       transcript: '',
-      summary: customDate ? `Reflections for ${formattedLabel}` : '',
+      summary: isActualDate ? `Reflections for ${formattedLabel}` : '',
       mood: 'Calm',
       moodEmoji: '😊',
       topics: [],
@@ -343,8 +345,8 @@ export default function App() {
       takeaways: [],
       ...({
         blocks: [
-          { id: 'b-title', type: 'h1', content: customDate ? `Journal Entry - ${formattedLabel}` : '' },
-          { id: `b-p-${Date.now()}`, type: 'paragraph', content: customDate ? `Reflections and daily planning on ${formattedLabel}... ☕` : '' }
+          { id: 'b-title', type: 'h1', content: isActualDate ? `Journal Entry - ${formattedLabel}` : '' },
+          { id: `b-p-${Date.now()}`, type: 'paragraph', content: isActualDate ? `Reflections and daily planning on ${formattedLabel}... ☕` : '' }
         ]
       })
     } as any;
@@ -586,7 +588,7 @@ export default function App() {
 
               <button
                 onClick={() => setCurrentTab('coach')}
-                title="AI Life Coach"
+                title="Goals & Habits"
                 className={`flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-xl text-xs font-bold tracking-wide transition-all border-2 ${
                   currentTab === 'coach' 
                     ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
@@ -594,8 +596,8 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Brain size={16} />
-                  {!isSidebarCollapsed && <span>AI Life Coach</span>}
+                  <Target size={16} />
+                  {!isSidebarCollapsed && <span>Goals & Habits</span>}
                 </div>
                 {!isSidebarCollapsed && <ChevronRight size={13} className="opacity-60" />}
               </button>
@@ -715,6 +717,10 @@ export default function App() {
                 {currentTab === 'analytics' && (
                   <MoodAnalytics 
                     entries={entries}
+                    habits={habits}
+                    goals={goals}
+                    setGoals={setGoals}
+                    setEntries={setEntries}
                     initialSelectedDate={calendarTargetDate}
                     onNavigateToEntry={(id) => {
                       const matched = entries.find(e => e.id === id);
@@ -739,6 +745,21 @@ export default function App() {
                 {currentTab === 'coach' && (
                   <AiCoach 
                     entries={entries}
+                    goals={goals}
+                    setGoals={setGoals}
+                    habits={habits}
+                    setHabits={setHabits}
+                    onNavigateToEntry={(id) => {
+                      const matched = entries.find(e => e.id === id);
+                      if (matched) {
+                        setSelectedEntry(matched);
+                        setAutoSelectEntryId(id);
+                        setCurrentTab('timeline');
+                      }
+                    }}
+                    onCreatePageForDate={(date) => {
+                      handleCreateJournalPage(date);
+                    }}
                   />
                 )}
 
@@ -821,7 +842,7 @@ export default function App() {
           <span className="text-[9px] font-black uppercase tracking-tight">Calendar</span>
         </button>
 
-        {/* Tab 5: AI Coach */}
+        {/* Tab 5: Goals & Habits */}
         <button
           onClick={() => {
             setCurrentTab('coach');
@@ -831,8 +852,8 @@ export default function App() {
             currentTab === 'coach' ? 'text-cozy-orange' : 'text-cozy-text-muted hover:text-cozy-text-dark'
           }`}
         >
-          <Brain size={20} className={currentTab === 'coach' ? 'stroke-[2.5]' : 'stroke-2'} />
-          <span className="text-[9px] font-black uppercase tracking-tight">Coach</span>
+          <Target size={20} className={currentTab === 'coach' ? 'stroke-[2.5]' : 'stroke-2'} />
+          <span className="text-[9px] font-black uppercase tracking-tight">Goals</span>
         </button>
 
         {/* Tab 6: Profile */}

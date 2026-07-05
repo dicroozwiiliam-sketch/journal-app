@@ -2,12 +2,9 @@ import React, { useState, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
-  Upload, 
-  Globe, 
-  Sparkles, 
-  Maximize2, 
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sparkles
 } from 'lucide-react';
 import { JournalBlock } from './JournalTimeline';
 
@@ -16,84 +13,52 @@ interface GalleryBlockProps {
   index: number;
   onUpdate: (blockId: string, updatedFields: Partial<JournalBlock>) => void;
   updateBlockContent: (blockId: string, content: string) => void;
+  onAddImageToScrapbook?: (url: string) => void;
 }
-
-const PRESET_AESTHETICS = [
-  {
-    name: 'Cozy Coffee',
-    url: 'https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&q=80&w=600',
-    emoji: '☕️'
-  },
-  {
-    name: 'Misty Forest',
-    url: 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&q=80&w=600',
-    emoji: '🌲'
-  },
-  {
-    name: 'Calm Ocean',
-    url: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&q=80&w=600',
-    emoji: '🌊'
-  },
-  {
-    name: 'Golden Hour',
-    url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&q=80&w=600',
-    emoji: '🌅'
-  },
-  {
-    name: 'Fresh Leaves',
-    url: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&q=80&w=600',
-    emoji: '🌿'
-  },
-  {
-    name: 'Quiet Library',
-    url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&q=80&w=600',
-    emoji: '📚'
-  }
-];
 
 export default function GalleryBlock({
   block,
   index,
   onUpdate,
-  updateBlockContent
+  updateBlockContent,
+  onAddImageToScrapbook
 }: GalleryBlockProps) {
   const meta = block.meta || {};
-  // Graceful fallback for older 'image' blocks with meta.url instead of meta.urls
   const urls: string[] = meta.urls || (meta.url ? [meta.url] : []);
-  
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-  const handleAddUrl = (url: string) => {
-    const updatedUrls = [...urls, url];
+  const handleAddUrls = (newUrls: string[]) => {
+    const updatedUrls = [...urls, ...newUrls];
     onUpdate(block.id, {
       meta: {
         ...meta,
         urls: updatedUrls
       }
     });
-    setShowAddMenu(false);
-  };
-
-  const handlePromptUrl = () => {
-    const url = prompt("Enter custom image URL:");
-    if (url && url.trim()) {
-      handleAddUrl(url.trim());
-    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        if (dataUrl) {
-          handleAddUrl(dataUrl);
-        }
-      };
-      reader.readAsDataURL(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const filesArray = Array.from(files);
+      const loadedUrls: string[] = [];
+      let loadedCount = 0;
+
+      filesArray.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          if (dataUrl) {
+            loadedUrls.push(dataUrl);
+          }
+          loadedCount++;
+          if (loadedCount === filesArray.length) {
+            handleAddUrls(loadedUrls);
+          }
+        };
+        reader.readAsDataURL(file as File);
+      });
     }
   };
 
@@ -107,200 +72,149 @@ export default function GalleryBlock({
     });
   };
 
-  const triggerFileSelector = () => {
+  const triggerFileSelector = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     fileInputRef.current?.click();
   };
 
-  // Determine grid template based on amount of images
-  const getGridClass = () => {
-    if (urls.length === 1) return 'grid-cols-1';
-    if (urls.length === 2) return 'grid-cols-2 gap-3';
-    return 'grid-cols-3 gap-2';
-  };
-
   return (
-    <div className="relative w-full bg-white border border-[#E2D1C3] p-5 rounded-2xl shadow-sm space-y-4 font-sans select-none">
-      
-      {/* Hidden File Input */}
+    <div className="relative w-full group/gallery select-none font-sans">
+      {/* Hidden File Input supporting multiple selections */}
       <input 
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileUpload} 
         accept="image/*" 
         className="hidden" 
+        multiple
       />
 
-      {/* Header Info */}
-      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-cozy-orange/10 rounded-lg text-cozy-orange">
-            <ImageIcon size={14} />
-          </div>
-          <div>
-            <span className="text-xs font-extrabold text-cozy-text-dark block">Photo Frame & Gallery</span>
-            <span className="text-[9px] text-cozy-text-muted block">Display your favorite memories & aesthetic themes</span>
-          </div>
-        </div>
-
-        {/* Add photo button */}
-        <button
-          type="button"
-          onClick={() => setShowAddMenu(!showAddMenu)}
-          className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-cozy-orange/15 hover:bg-cozy-orange text-cozy-orange hover:text-white px-2.5 py-1.5 rounded-lg transition duration-200 cursor-pointer"
-        >
-          <Plus size={11} />
-          <span>Add Photo</span>
-        </button>
-      </div>
-
-      {/* Add Photo Expandable Panel */}
-      {showAddMenu && (
-        <div className="p-3.5 bg-[#FAF5F0] border border-[#E2D1C3]/60 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between text-[10px] font-bold text-cozy-text-dark">
-            <span>CHOOSE HOW TO ADD PHOTO:</span>
-            <button 
-              type="button" 
-              onClick={() => setShowAddMenu(false)}
-              className="text-cozy-text-muted hover:text-cozy-text-dark cursor-pointer"
-            >
-              <X size={12} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={triggerFileSelector}
-              className="flex items-center justify-center gap-1.5 p-2 bg-white hover:bg-cozy-bg border border-[#E2D1C3]/40 rounded-lg text-xs font-semibold text-cozy-text-dark transition cursor-pointer"
-            >
-              <Upload size={12} className="text-cozy-orange" />
-              <span>Upload Device Photo</span>
-            </button>
-            <button
-              type="button"
-              onClick={handlePromptUrl}
-              className="flex items-center justify-center gap-1.5 p-2 bg-white hover:bg-cozy-bg border border-[#E2D1C3]/40 rounded-lg text-xs font-semibold text-cozy-text-dark transition cursor-pointer"
-            >
-              <Globe size={12} className="text-[#3B82F6]" />
-              <span>Paste Image URL</span>
-            </button>
-          </div>
-
-          {/* Presets Grid */}
-          <div className="space-y-1.5">
-            <div className="text-[9px] font-black uppercase text-cozy-text-muted tracking-wider">
-              Or Select Warm Cozy Preset Aesthetic:
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {PRESET_AESTHETICS.map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => handleAddUrl(preset.url)}
-                  className="flex items-center gap-1 p-1 bg-white hover:bg-amber-50/50 border border-gray-100 rounded-md text-[10px] font-medium text-cozy-text-dark hover:border-[#EF9A7A]/40 transition text-left cursor-pointer"
-                >
-                  <span className="text-xs">{preset.emoji}</span>
-                  <span className="truncate">{preset.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Gallery Layout Stage */}
-      {urls.length === 0 ? (
-        // Empty State (Exactly as requested!)
-        <div className="border border-dashed border-[#E2D1C3] rounded-xl p-8 flex flex-col items-center justify-center text-center bg-gray-50/50 min-h-[160px] space-y-3">
-          <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 border border-amber-100 animate-pulse">
-            <ImageIcon size={20} />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-xs font-black text-cozy-text-dark">Your Photo Frame is Empty</h4>
-            <p className="text-[10px] text-cozy-text-muted max-w-[240px] leading-relaxed">
-              Upload personal photos, memories, or choose from our beautiful visual aesthetic templates to inspire your diary reflections!
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowAddMenu(true)}
-            className="flex items-center gap-1 text-[10px] font-bold text-cozy-orange hover:underline cursor-pointer"
+      {/* Main Container - Small Thin Border */}
+      <div className="w-full bg-[#FAF9F6]/20 border border-[#E2D1C3]/60 rounded-2xl p-2 transition-all duration-300 hover:border-cozy-orange/45">
+        {urls.length === 0 ? (
+          // Empty State - Ultra Simple Upload Box
+          <div 
+            onClick={() => triggerFileSelector()}
+            className="border border-dashed border-[#E2D1C3] bg-[#FAF8F1]/40 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#FAF8F1]/80 hover:border-cozy-orange/50 transition-all duration-200 min-h-[140px] space-y-2.5 group/box"
           >
-            <Plus size={12} />
-            <span>Add your first photo</span>
-          </button>
-        </div>
-      ) : (
-        // Active Gallery Content (Custom single frame or grid!)
-        <div className={`grid ${getGridClass()}`}>
-          {urls.map((url, idx) => (
-            <div 
-              key={idx} 
-              className={`group/photo relative bg-[#FDF8F1] overflow-hidden border border-[#E2D1C3] p-1.5 shadow-sm hover:shadow-md hover:scale-[1.01] transition duration-200 ${
-                urls.length === 1 
-                  ? 'rounded-2xl max-h-[300px]' 
-                  : urls.length === 2 
-                    ? 'rounded-xl aspect-[4/3]' 
-                    : 'rounded-lg aspect-square'
-              }`}
+            <div className="w-10 h-10 rounded-full bg-amber-50/80 flex items-center justify-center text-cozy-orange border border-amber-100/60 group-hover/box:scale-110 transition-transform duration-200">
+              <Plus size={18} strokeWidth={2.5} />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs font-black text-cozy-text-dark block uppercase tracking-wide font-mono">Add your photo</span>
+              <span className="text-[10px] text-cozy-text-muted block">Click here to upload from device (multiple allowed)</span>
+            </div>
+          </div>
+        ) : (
+          // Active State - Responsive uncropped layouts depending on photo count
+          <div className="relative w-full">
+            {/* Hover Floating Plus Button to add more photos */}
+            <button
+              type="button"
+              onClick={(e) => triggerFileSelector(e)}
+              className="absolute top-2 right-2 z-30 w-8 h-8 rounded-full bg-white/90 hover:bg-cozy-orange text-cozy-text-dark hover:text-white border border-[#E2D1C3]/80 shadow-md flex items-center justify-center transition-all duration-200 opacity-0 group-hover/gallery:opacity-100 scale-90 group-hover/gallery:scale-100 cursor-pointer"
+              title="Add another photo"
             >
-              {/* Photo Frame Matte Border/Polaroid feel */}
-              <div className="w-full h-full relative overflow-hidden rounded-md">
+              <Plus size={16} strokeWidth={2.5} />
+            </button>
+
+            {urls.length === 1 ? (
+              // Single Photo - Perfect Aspect Ratio Preservation (No Crop!)
+              <div className="group/photo relative bg-[#FDF8F1] overflow-hidden border border-[#E2D1C3]/45 p-1.5 rounded-xl shadow-xs hover:shadow-sm transition-all duration-200 mx-auto w-full max-w-2xl">
                 <img
-                  alt={`Gallery photo ${idx + 1}`}
-                  className="w-full h-full object-cover"
-                  src={url}
+                  alt="Single memory"
+                  className="w-full h-auto max-h-[600px] object-contain rounded-lg cursor-pointer"
+                  src={urls[0]}
+                  onClick={() => setZoomedImage(urls[0])}
                   referrerPolicy="no-referrer"
                 />
-                
-                {/* Action Hover Overlay */}
-                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover/photo:opacity-100 transition duration-150 flex items-center justify-center gap-2">
+                {/* Trash & Pin to Canvas overlay */}
+                <div className="absolute top-3.5 right-3.5 opacity-0 group-hover/photo:opacity-100 transition-all duration-150 z-10 flex gap-1.5">
+                  {onAddImageToScrapbook && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddImageToScrapbook(urls[0]);
+                      }}
+                      className="p-1.5 bg-cozy-orange hover:bg-cozy-accent text-white rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 border border-cozy-text-dark"
+                      title="Add to Cozy Canvas"
+                    >
+                      <Sparkles size={12} />
+                      <span>Pin to Canvas</span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setZoomedImage(url)}
-                    className="p-1.5 bg-white/90 hover:bg-white text-cozy-text-dark rounded-lg shadow-sm transition cursor-pointer"
-                    title="Zoom Photo"
-                  >
-                    <Maximize2 size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveUrl(idx)}
-                    className="p-1.5 bg-rose-500/90 hover:bg-rose-500 text-white rounded-lg shadow-sm transition cursor-pointer"
-                    title="Delete Photo"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveUrl(0);
+                    }}
+                    className="p-1.5 bg-rose-500/90 hover:bg-rose-500 text-white rounded-lg shadow-sm transition cursor-pointer border border-cozy-text-dark"
+                    title="Remove Photo"
                   >
                     <Trash2 size={12} />
                   </button>
                 </div>
               </div>
-
-              {/* Polaroid bottom lip for single photo */}
-              {urls.length === 1 && (
-                <div className="text-center pt-2 pb-0.5 text-[8px] font-bold text-cozy-text-muted/65 uppercase tracking-widest">
-                  Memory Frame
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Caption Field */}
-      <div className="pt-1.5">
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => updateBlockContent(block.id, e.target.value)}
-          className="w-full text-xs text-cozy-text-muted italic bg-transparent border-none focus:outline-none focus:ring-0 text-center py-0.5"
-          placeholder="Add gallery frame caption..."
-        />
+            ) : (
+              // Multiple Photos - Organic Masonry Column Layout to preserve ALL custom ratios uncropped!
+              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
+                {urls.map((url, idx) => (
+                  <div 
+                    key={idx} 
+                    className="break-inside-avoid group/photo relative bg-[#FDF8F1] overflow-hidden border border-[#E2D1C3]/40 p-1.5 rounded-xl shadow-xs hover:shadow-sm transition-all duration-200 inline-block w-full"
+                  >
+                    <img
+                      alt={`Memory ${idx + 1}`}
+                      className="w-full h-auto object-contain rounded-lg cursor-pointer"
+                      src={url}
+                      onClick={() => setZoomedImage(url)}
+                      referrerPolicy="no-referrer"
+                    />
+                    {/* Trash & Pin to Canvas overlay */}
+                    <div className="absolute top-3 right-3 opacity-0 group-hover/photo:opacity-100 transition-all duration-150 z-10 flex gap-1.5">
+                      {onAddImageToScrapbook && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddImageToScrapbook(url);
+                          }}
+                          className="p-1 bg-cozy-orange hover:bg-cozy-accent text-white rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 border border-cozy-text-dark"
+                          title="Add to Cozy Canvas"
+                        >
+                          <Sparkles size={10} />
+                          <span>Pin</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveUrl(idx);
+                        }}
+                        className="p-1.5 bg-rose-500/90 hover:bg-rose-500 text-white rounded-lg shadow-sm transition cursor-pointer border border-cozy-text-dark"
+                        title="Remove Photo"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Lightbox / Zoom Dialog */}
       {zoomedImage && (
         <div 
           onClick={() => setZoomedImage(null)}
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-55 flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
+          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-55 flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-zoom-out"
         >
           <div className="relative max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl bg-white p-2 border border-white/10 shadow-2xl">
             <button
@@ -318,7 +232,6 @@ export default function GalleryBlock({
           </div>
         </div>
       )}
-
     </div>
   );
 }

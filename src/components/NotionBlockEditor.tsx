@@ -299,12 +299,14 @@ interface NotionBlockEditorProps {
   blocks: JournalBlock[];
   onChange: (updatedBlocks: JournalBlock[]) => void;
   showToast: (msg: string) => void;
+  onAddImageToScrapbook?: (url: string) => void;
 }
 
 export default function NotionBlockEditor({ 
   blocks, 
   onChange, 
-  showToast 
+  showToast,
+  onAddImageToScrapbook
 }: NotionBlockEditorProps) {
   // Undo/Redo Stacks
   const [history, setHistory] = useState<JournalBlock[][]>([]);
@@ -340,7 +342,6 @@ export default function NotionBlockEditor({
     { type: 'audio', label: 'Audio sounds', desc: 'Play ambient track lists', icon: <span className="text-xs">♫</span> },
     { type: 'video', label: 'Video player', desc: 'Simulated video progress clip', icon: <span className="text-xs">▶</span> },
     { type: 'table', label: 'Table sheet', desc: 'Editable 2D cell grids', icon: <Table2 size={12} className="text-gray-500" /> },
-    { type: 'file', label: 'Attach File / Document', desc: 'Embed a downloadable PDF, Word, or MP3 file', icon: <Paperclip size={13} className="text-[#96A376]" /> },
   ];
 
   const getFilteredCommands = (query: string) => {
@@ -586,33 +587,6 @@ export default function NotionBlockEditor({
         </button>
         <button
           type="button"
-          onClick={() => {
-            const bIdx = blocks.findIndex(b => b.id === blockId);
-            if (bIdx !== -1) {
-              const newBlock: JournalBlock = {
-                id: `b-file-${Date.now()}`,
-                type: 'file',
-                content: 'Mindfulness_Checklist_Guide.pdf',
-                meta: {
-                  fileName: 'Mindfulness_Checklist_Guide.pdf',
-                  fileType: 'pdf',
-                  fileSize: '2.4 MB'
-                }
-              };
-              const updated = [...blocks];
-              updated.splice(bIdx + 1, 0, newBlock);
-              updateBlocksWithHistory(updated);
-              showToast("Attached PDF Document block below!");
-            }
-          }}
-          className="p-1 hover:bg-[#96A376]/10 rounded text-[#96A376] flex items-center justify-center shrink-0"
-          title="Attach File/Document"
-        >
-          <Paperclip size={13} strokeWidth={2.5} />
-        </button>
-        <span className="text-gray-300">|</span>
-        <button
-          type="button"
           onClick={() => applyFormattingToSelection(blockId, 'color', 'red')}
           className="w-3.5 h-3.5 rounded-full bg-red-500 hover:scale-110 transition border border-black/10 cursor-pointer"
           title="Red text"
@@ -798,12 +772,6 @@ export default function NotionBlockEditor({
           meta = {
             urls: []
           };
-        } else if (newType === 'file') {
-          meta = {
-            fileName: 'Mindfulness_Checklist_Guide.pdf',
-            fileSize: '2.4 MB',
-            fileType: 'pdf'
-          };
         }
 
         return {
@@ -846,13 +814,6 @@ export default function NotionBlockEditor({
           meta = {
             urls: []
           };
-        } else if (type === 'file') {
-          meta = {
-            fileName: 'Mindfulness_Checklist_Guide.pdf',
-            fileSize: '2.4 MB',
-            fileType: 'pdf'
-          };
-          newContent = newContent || 'Mindfulness_Checklist_Guide.pdf';
         } else if (type === 'quote') {
           newContent = newContent || 'In quietude, the voice finds its nest.';
         }
@@ -983,21 +944,52 @@ export default function NotionBlockEditor({
       e.preventDefault();
       commitBlockContentToHistory();
       
-      // Keep lists rolling if Enter is pressed on an existing bullet or todo
-      const nextType = (currentBlock.type === 'todo' || currentBlock.type === 'bullet' || currentBlock.type === 'number') 
-        ? currentBlock.type 
-        : 'paragraph';
+      let nextType: JournalBlock['type'] = 'paragraph';
+      let nextIndent = currentBlock.indent || 0;
+      let insertIndex = index + 1;
+
+      if (currentBlock.type === 'toggle') {
+        if (!currentBlock.collapsed) {
+          // If expanded, insert a new nested paragraph block inside the toggle
+          nextType = 'paragraph';
+          nextIndent = Math.min((currentBlock.indent || 0) + 1, 4);
+          insertIndex = index + 1;
+        } else {
+          // If collapsed, insert a new toggle block at the same level, after all of its nested children
+          nextType = 'toggle';
+          nextIndent = currentBlock.indent || 0;
+          
+          // Find the last index of nested children
+          let lastChildIndex = index;
+          for (let i = index + 1; i < blocks.length; i++) {
+            if ((blocks[i].indent || 0) > (currentBlock.indent || 0)) {
+              lastChildIndex = i;
+            } else {
+              break;
+            }
+          }
+          insertIndex = lastChildIndex + 1;
+        }
+      } else {
+        // Keep lists rolling if Enter is pressed on an existing bullet, todo, or number
+        nextType = (currentBlock.type === 'todo' || currentBlock.type === 'bullet' || currentBlock.type === 'number') 
+          ? currentBlock.type 
+          : 'paragraph';
+        nextIndent = currentBlock.indent || 0;
+        insertIndex = index + 1;
+      }
 
       const newBlock: JournalBlock = {
         id: `b-new-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         type: nextType,
         content: '',
         completed: nextType === 'todo' ? false : undefined,
-        indent: currentBlock.indent || 0
+        collapsed: nextType === 'toggle' ? false : undefined,
+        indent: nextIndent
       };
 
       const updated = [...blocks];
-      updated.splice(index + 1, 0, newBlock);
+      updated.splice(insertIndex, 0, newBlock);
       onChange(updated); // Update parent
 
       setTimeout(() => {
@@ -1414,7 +1406,7 @@ export default function NotionBlockEditor({
               className={`group/block relative flex items-start gap-1 py-1 rounded-xl transition duration-150 ${
                 dragOverIndex === index ? 'bg-[#D28C5C]/5' : ''
               } ${index === 0 ? 'mt-2' : ''}`}
-              style={{ paddingLeft: `${Math.max(4, indentLevel * 24 + 32)}px` }}
+              style={{ paddingLeft: `${Math.max(4, indentLevel * 24 + 48)}px` }}
             >
               {/* Drop target indicator lines */}
               {dragOverIndex === index && dragDropPosition && (
@@ -1425,10 +1417,10 @@ export default function NotionBlockEditor({
                     bottom: dragDropPosition !== 'above' ? '-1.5px' : 'auto',
                     marginLeft: `${
                       dragDropPosition === 'inside' 
-                        ? Math.max(4, (indentLevel + 1) * 24 + 32) 
+                        ? Math.max(4, (indentLevel + 1) * 24 + 48) 
                         : dragDropPosition === 'outside' 
-                          ? Math.max(4, Math.max(0, indentLevel - 1) * 24 + 32) 
-                          : Math.max(4, indentLevel * 24 + 32)
+                          ? Math.max(4, Math.max(0, indentLevel - 1) * 24 + 48) 
+                          : Math.max(4, indentLevel * 24 + 48)
                     }px` 
                   }}
                 />
@@ -1547,7 +1539,7 @@ export default function NotionBlockEditor({
                           </div>
 
                           <div className="max-h-28 overflow-y-auto px-1 py-1 space-y-0.5">
-                            {(['paragraph', 'h1', 'h2', 'h3', 'quote', 'divider', 'bullet', 'number', 'todo', 'toggle', 'gallery', 'voice', 'audio', 'video', 'table', 'file'] as const).map(type => (
+                            {(['paragraph', 'h1', 'h2', 'h3', 'quote', 'divider', 'bullet', 'number', 'todo', 'toggle', 'gallery', 'voice', 'audio', 'video', 'table'] as const).map(type => (
                               <button
                                 key={type}
                                 onClick={() => convertBlockType(index, type)}
@@ -1555,7 +1547,7 @@ export default function NotionBlockEditor({
                                   block.type === type ? 'font-bold bg-[#EF9A7A]/10 text-cozy-orange' : ''
                                 }`}
                               >
-                                {type === 'todo' ? 'Checklist' : type === 'number' ? 'Numbered List' : type === 'file' ? 'File Attachment' : type}
+                                {type === 'todo' ? 'Checklist' : type === 'number' ? 'Numbered List' : type}
                               </button>
                             ))}
                           </div>
@@ -1813,9 +1805,9 @@ export default function NotionBlockEditor({
                         const updated = blocks.map((b, i) => i === index ? { ...b, collapsed: !b.collapsed } : b);
                         updateBlocksWithHistory(updated);
                       }}
-                      className="p-1 hover:bg-[#E2D1C3]/30 rounded text-cozy-text-muted hover:text-cozy-text-dark transition shrink-0"
+                      className="p-1.5 hover:bg-[#E2D1C3]/30 rounded-lg text-cozy-text-muted hover:text-cozy-text-dark transition shrink-0 cursor-pointer flex items-center justify-center"
                     >
-                      <ChevronRight size={15} className={`transform transition-transform ${!block.collapsed ? 'rotate-90' : ''}`} />
+                      <ChevronRight size={16} className={`transform transition-transform duration-200 ${!block.collapsed ? 'rotate-90' : ''}`} />
                     </button>
                     <BlockContentEditable
                       id={`input-${block.id}`}
@@ -1845,6 +1837,7 @@ export default function NotionBlockEditor({
                     index={index}
                     onUpdate={updateBlock}
                     updateBlockContent={updateBlockContent}
+                    onAddImageToScrapbook={onAddImageToScrapbook}
                   />
                 )}
 
@@ -1867,321 +1860,118 @@ export default function NotionBlockEditor({
                   const meta = block.meta || {};
                   const isEditing = meta.isEditing !== false && (!meta.audioSource || meta.isEditing);
                   const audioSource = meta.audioSource || '';
-                  const activeTab = meta.activeTab || 'spotify';
 
                   return (
-                    <div className="relative w-full bg-white border-2 border-[#E2D1C3] p-4 rounded-3xl shadow-xs space-y-3 font-sans">
-                      {isEditing ? (
-                        <div className="bg-[#FAF6EB] p-4 border-2 border-dashed border-cozy-text-dark/30 rounded-2xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-black uppercase tracking-wider text-cozy-orange flex items-center gap-1.5">
-                              <Music size={14} /> Cozy Music Settings
-                            </span>
-                            {meta.audioSource && (
-                              <button
-                                onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
-                                className="p-1 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer"
-                                title="Close Settings"
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
+                    <div className="w-full bg-[#FAF9F6]/20 border border-[#E2D1C3]/60 rounded-2xl p-2 transition-all duration-300 hover:border-cozy-orange/45">
+                      <div className="relative w-full bg-white border border-[#E2D1C3]/40 p-4 rounded-xl shadow-xs space-y-3 font-sans">
+                        {isEditing ? (
+                        <div className="space-y-4 relative w-full">
+                          {meta.audioSource && (
+                            <button
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
+                              className="absolute top-0 right-0 p-1.5 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer z-10"
+                              title="Close Settings"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                          
+                          {/* Main uploader box styled exactly like photo empty state */}
+                          <div 
+                            onClick={() => {
+                              const fileInput = document.getElementById(`audio-file-input-${block.id}`);
+                              fileInput?.click();
+                            }}
+                            className="border border-dashed border-[#E2D1C3] bg-[#FAF8F1]/40 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#FAF8F1]/80 hover:border-cozy-orange/50 transition-all duration-200 min-h-[140px] space-y-2.5 group/box"
+                          >
+                            <div className="w-10 h-10 rounded-full bg-amber-50/80 flex items-center justify-center text-cozy-orange border border-amber-100/60 group-hover/box:scale-110 transition-transform duration-200">
+                              <Music size={18} strokeWidth={2.5} />
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-black text-cozy-text-dark block uppercase tracking-wide font-mono">Add your music</span>
+                              <span className="text-[10px] text-cozy-text-muted block">Click here to upload from device (.mp3, .wav, .m4a)</span>
+                            </div>
                           </div>
 
-                          {/* Source Type Selector Tabs */}
-                          <div className="grid grid-cols-4 gap-1.5 p-1 bg-cozy-text-dark/5 rounded-xl text-[10px] font-bold">
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'spotify' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'spotify' ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <Music size={14} />
-                              <span>Spotify</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'other_apps' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'other_apps' ? 'bg-white text-orange-600 shadow-xs border border-orange-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <Headphones size={14} />
-                              <span>SoundCloud</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'upload' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'upload' ? 'bg-white text-blue-600 shadow-xs border border-blue-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <Upload size={14} />
-                              <span>Upload File</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'link' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'link' ? 'bg-white text-violet-600 shadow-xs border border-violet-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <LinkIcon size={14} />
-                              <span>Direct Link</span>
-                            </button>
-                          </div>
+                          <input
+                            type="file"
+                            id={`audio-file-input-${block.id}`}
+                            accept="audio/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const objUrl = URL.createObjectURL(file);
+                                localAudioFilesCache[block.id] = objUrl;
+                                updateBlock(block.id, {
+                                  meta: {
+                                    ...meta,
+                                    audioSource: 'file',
+                                    fileName: file.name,
+                                    isEditing: false
+                                  }
+                                });
+                                showToast(`Loaded audio file: ${file.name} 🎧`);
+                              }
+                            }}
+                          />
 
-                          {/* Tab Contents */}
-                          {activeTab === 'spotify' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Paste a Spotify track, album, playlist, or artist link below to listen directly in your journal.
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="https://open.spotify.com/track/..."
-                                  defaultValue={meta.audioUrl || ''}
-                                  id={`spotify-input-${block.id}`}
-                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.currentTarget;
-                                      const val = input.value;
+                          {/* Web link input below uploader */}
+                          <div className="space-y-2 pt-1">
+                            <label className="text-[10px] text-cozy-text-muted font-bold uppercase tracking-wider block">Or embed from web link</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Paste Spotify, Apple Music, SoundCloud, or direct audio link..."
+                                id={`universal-audio-input-${block.id}`}
+                                defaultValue={meta.audioUrl || ''}
+                                className="flex-1 bg-white border border-[#E2D1C3] focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark shadow-xs"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = e.currentTarget.value.trim();
+                                    if (val) {
                                       const parsed = getMusicEmbedUrl(val);
-                                      if (parsed.provider === 'spotify') {
-                                        updateBlock(block.id, {
-                                          meta: {
-                                            ...meta,
-                                            audioSource: 'spotify',
-                                            audioUrl: val,
-                                            embedUrl: parsed.embedUrl,
-                                            isEditing: false
-                                          }
-                                        });
-                                        showToast('Spotify link embedded successfully! 🎵');
-                                      } else {
-                                        showToast('Please enter a valid Spotify track/album/playlist link ⚠️');
-                                      }
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`spotify-input-${block.id}`) as HTMLInputElement;
-                                    const val = input?.value || '';
-                                    const parsed = getMusicEmbedUrl(val);
-                                    if (parsed.provider === 'spotify') {
                                       updateBlock(block.id, {
                                         meta: {
                                           ...meta,
-                                          audioSource: 'spotify',
+                                          audioSource: parsed.provider === 'unknown' ? 'url' : parsed.provider,
                                           audioUrl: val,
                                           embedUrl: parsed.embedUrl,
                                           isEditing: false
                                         }
                                       });
-                                      showToast('Spotify link embedded successfully! 🎵');
-                                    } else {
-                                      showToast('Please enter a valid Spotify link ⚠️');
+                                      showToast('Audio link embedded successfully! 🎵');
                                     }
-                                  }}
-                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl border border-emerald-700 shadow-xs cursor-pointer"
-                                >
-                                  Load
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {activeTab === 'other_apps' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Embed an Apple Music or SoundCloud track link to play ambient tunes alongside your journal.
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="Apple Music or SoundCloud link..."
-                                  defaultValue={meta.audioUrl || ''}
-                                  id={`other-music-input-${block.id}`}
-                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.currentTarget;
-                                      const val = input.value;
-                                      const parsed = getMusicEmbedUrl(val);
-                                      if (parsed.provider === 'apple' || parsed.provider === 'soundcloud') {
-                                        updateBlock(block.id, {
-                                          meta: {
-                                            ...meta,
-                                            audioSource: parsed.provider,
-                                            audioUrl: val,
-                                            embedUrl: parsed.embedUrl,
-                                            isEditing: false
-                                          }
-                                        });
-                                        showToast(`${parsed.provider === 'apple' ? 'Apple Music' : 'SoundCloud'} link embedded! 🎧`);
-                                      } else {
-                                        showToast('Please enter a valid Apple Music or SoundCloud URL ⚠️');
-                                      }
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`other-music-input-${block.id}`) as HTMLInputElement;
-                                    const val = input?.value || '';
-                                    const parsed = getMusicEmbedUrl(val);
-                                    if (parsed.provider === 'apple' || parsed.provider === 'soundcloud') {
-                                      updateBlock(block.id, {
-                                        meta: {
-                                          ...meta,
-                                          audioSource: parsed.provider,
-                                          audioUrl: val,
-                                          embedUrl: parsed.embedUrl,
-                                          isEditing: false
-                                        }
-                                      });
-                                      showToast(`${parsed.provider === 'apple' ? 'Apple Music' : 'SoundCloud'} link embedded! 🎧`);
-                                    } else {
-                                      showToast('Please enter a valid Apple Music or SoundCloud URL ⚠️');
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl border border-orange-700 shadow-xs cursor-pointer"
-                                >
-                                  Load
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {activeTab === 'upload' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Select or drag a local audio file (MP3, WAV, M4A) from your computer. It is played completely offline.
-                              </p>
-                              <div 
-                                className="border-2 border-dashed border-cozy-text-dark/20 hover:border-cozy-orange/40 bg-white rounded-xl p-4 text-center cursor-pointer transition relative group"
-                                onClick={() => {
-                                  const fileInput = document.getElementById(`audio-file-input-${block.id}`);
-                                  fileInput?.click();
+                                  }
                                 }}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const file = e.dataTransfer.files?.[0];
-                                  if (file && file.type.startsWith('audio/')) {
-                                    const objUrl = URL.createObjectURL(file);
-                                    localAudioFilesCache[block.id] = objUrl;
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const input = document.getElementById(`universal-audio-input-${block.id}`) as HTMLInputElement;
+                                  const val = input?.value.trim() || '';
+                                  if (val) {
+                                    const parsed = getMusicEmbedUrl(val);
                                     updateBlock(block.id, {
                                       meta: {
                                         ...meta,
-                                        audioSource: 'file',
-                                        fileName: file.name,
+                                        audioSource: parsed.provider === 'unknown' ? 'url' : parsed.provider,
+                                        audioUrl: val,
+                                        embedUrl: parsed.embedUrl,
                                         isEditing: false
                                       }
                                     });
-                                    showToast(`Loaded audio file: ${file.name} 🎧`);
+                                    showToast('Audio link embedded successfully! 🎵');
                                   } else {
-                                    showToast('Please upload a valid audio file ⚠️');
+                                    showToast('Please enter a link ⚠️');
                                   }
                                 }}
+                                className="px-3.5 py-1.5 bg-cozy-orange hover:bg-cozy-orange/90 text-white font-black text-xs rounded-xl border border-cozy-orange shadow-xs cursor-pointer transition duration-150 shrink-0"
                               >
-                                <input
-                                  type="file"
-                                  id={`audio-file-input-${block.id}`}
-                                  accept="audio/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const objUrl = URL.createObjectURL(file);
-                                      localAudioFilesCache[block.id] = objUrl;
-                                      updateBlock(block.id, {
-                                        meta: {
-                                          ...meta,
-                                          audioSource: 'file',
-                                          fileName: file.name,
-                                          isEditing: false
-                                        }
-                                      });
-                                      showToast(`Loaded audio file: ${file.name} 🎧`);
-                                    }
-                                  }}
-                                />
-                                <div className="flex flex-col items-center justify-center gap-1.5">
-                                  <Upload className="text-cozy-text-muted group-hover:text-cozy-orange transition" size={24} />
-                                  <span className="text-[11px] font-bold text-cozy-text-dark">
-                                    Click or drag audio file here
-                                  </span>
-                                  <span className="text-[9px] text-cozy-text-muted">
-                                    MP3, WAV, M4A, etc.
-                                  </span>
-                                </div>
-                              </div>
+                                Embed Link
+                              </button>
                             </div>
-                          )}
-
-                          {activeTab === 'link' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Enter a direct link to any .mp3, .wav, or .m4a online file to stream inside your page.
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="https://example.com/ambient-forest.mp3"
-                                  defaultValue={meta.audioUrl || ''}
-                                  id={`audio-url-input-${block.id}`}
-                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.currentTarget;
-                                      const val = input.value;
-                                      if (val) {
-                                        updateBlock(block.id, {
-                                          meta: {
-                                            ...meta,
-                                            audioSource: 'url',
-                                            audioUrl: val,
-                                            isEditing: false
-                                          }
-                                        });
-                                        showToast('Direct audio link loaded! 🎵');
-                                      }
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`audio-url-input-${block.id}`) as HTMLInputElement;
-                                    const val = input?.value || '';
-                                    if (val) {
-                                      updateBlock(block.id, {
-                                        meta: {
-                                          ...meta,
-                                          audioSource: 'url',
-                                          audioUrl: val,
-                                          isEditing: false
-                                        }
-                                      });
-                                      showToast('Direct audio link loaded! 🎵');
-                                    } else {
-                                      showToast('Please enter a valid link ⚠️');
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-xl border border-violet-700 shadow-xs cursor-pointer"
-                                >
-                                  Load
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </div>
                       ) : (
                         <div className="relative bg-[#FAF6EB] border border-cozy-text-dark/15 p-4 rounded-2xl group/music-player">
@@ -2320,6 +2110,7 @@ export default function NotionBlockEditor({
                         placeholder="Add a music track caption..."
                       />
                     </div>
+                    </div>
                   );
                 })()}
 
@@ -2328,78 +2119,76 @@ export default function NotionBlockEditor({
                   const meta = block.meta || {};
                   const isEditing = meta.isEditing !== false && (!meta.videoSource || meta.isEditing);
                   const videoSource = meta.videoSource || '';
-                  const activeTab = meta.activeTab || 'youtube';
 
                   return (
-                    <div className="relative w-full bg-white border-2 border-[#E2D1C3] p-4 rounded-3xl shadow-xs space-y-3 font-sans">
-                      {isEditing ? (
-                        <div className="bg-[#FAF6EB] p-4 border-2 border-dashed border-cozy-text-dark/30 rounded-2xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-black uppercase tracking-wider text-cozy-orange flex items-center gap-1.5">
-                              <Video size={14} /> Video Source Settings
-                            </span>
-                            {meta.videoSource && (
-                              <button
-                                onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
-                                className="p-1 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer"
-                                title="Close Settings"
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
+                    <div className="w-full bg-[#FAF9F6]/20 border border-[#E2D1C3]/60 rounded-2xl p-2 transition-all duration-300 hover:border-cozy-orange/45">
+                      <div className="relative w-full bg-white border border-[#E2D1C3]/40 p-4 rounded-xl shadow-xs space-y-3 font-sans">
+                        {isEditing ? (
+                        <div className="space-y-4 relative w-full">
+                          {meta.videoSource && (
+                            <button
+                              onClick={() => updateBlock(block.id, { meta: { ...meta, isEditing: false } })}
+                              className="absolute top-0 right-0 p-1.5 hover:bg-cozy-text-dark/10 rounded-full text-cozy-text-dark transition cursor-pointer z-10"
+                              title="Close Settings"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                          
+                          {/* Main uploader box styled exactly like photo empty state */}
+                          <div 
+                            onClick={() => {
+                              const fileInput = document.getElementById(`video-file-input-${block.id}`);
+                              fileInput?.click();
+                            }}
+                            className="border border-dashed border-[#E2D1C3] bg-[#FAF8F1]/40 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#FAF8F1]/80 hover:border-cozy-orange/50 transition-all duration-200 min-h-[140px] space-y-2.5 group/box"
+                          >
+                            <div className="w-10 h-10 rounded-full bg-amber-50/80 flex items-center justify-center text-cozy-orange border border-amber-100/60 group-hover/box:scale-110 transition-transform duration-200">
+                              <Video size={18} strokeWidth={2.5} />
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-black text-cozy-text-dark block uppercase tracking-wide font-mono">Add your video</span>
+                              <span className="text-[10px] text-cozy-text-muted block">Click here to upload from device (.mp4, .webm)</span>
+                            </div>
                           </div>
 
-                          {/* Source Type Selector Tabs */}
-                          <div className="grid grid-cols-3 gap-1.5 p-1 bg-cozy-text-dark/5 rounded-xl text-[10px] font-bold">
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'youtube' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'youtube' ? 'bg-white text-rose-600 shadow-xs border border-rose-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <Youtube size={14} />
-                              <span>YouTube</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'upload' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'upload' ? 'bg-white text-emerald-600 shadow-xs border border-emerald-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <Upload size={14} />
-                              <span>Upload File</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateBlock(block.id, { meta: { ...meta, activeTab: 'url' } })}
-                              className={`py-1.5 rounded-lg flex flex-col items-center gap-1 transition cursor-pointer ${
-                                activeTab === 'url' ? 'bg-white text-blue-600 shadow-xs border border-blue-100' : 'text-cozy-text-muted hover:text-cozy-text-dark'
-                              }`}
-                            >
-                              <LinkIcon size={14} />
-                              <span>Direct Link</span>
-                            </button>
-                          </div>
+                          <input
+                            type="file"
+                            id={`video-file-input-${block.id}`}
+                            accept="video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const objUrl = URL.createObjectURL(file);
+                                localVideoFilesCache[block.id] = objUrl;
+                                updateBlock(block.id, {
+                                  meta: {
+                                    ...meta,
+                                    videoSource: 'file',
+                                    fileName: file.name,
+                                    isEditing: false
+                                  }
+                                });
+                                showToast(`Loaded device video: ${file.name} 🎬`);
+                              }
+                            }}
+                          />
 
-                          {/* Tab Contents */}
-                          {activeTab === 'youtube' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Paste any YouTube link below (relaxing music, mindfulness guides, background lofi).
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="https://www.youtube.com/watch?v=..."
-                                  defaultValue={meta.videoUrl || ''}
-                                  id={`yt-input-${block.id}`}
-                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.currentTarget;
-                                      const val = input.value;
+                          {/* Web link input below uploader */}
+                          <div className="space-y-2 pt-1">
+                            <label className="text-[10px] text-cozy-text-muted font-bold uppercase tracking-wider block">Or embed from web link</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Paste YouTube link or direct video (.mp4, .webm) link..."
+                                id={`universal-video-input-${block.id}`}
+                                defaultValue={meta.videoUrl || ''}
+                                className="flex-1 bg-white border border-[#E2D1C3] focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark shadow-xs"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = e.currentTarget.value.trim();
+                                    if (val) {
                                       const embedId = getYouTubeEmbedId(val);
                                       if (embedId) {
                                         updateBlock(block.id, {
@@ -2413,16 +2202,26 @@ export default function NotionBlockEditor({
                                         });
                                         showToast('YouTube video linked successfully! 📺');
                                       } else {
-                                        showToast('Please enter a valid YouTube video URL ⚠️');
+                                        updateBlock(block.id, {
+                                          meta: {
+                                            ...meta,
+                                            videoSource: 'url',
+                                            videoUrl: val,
+                                            isEditing: false
+                                          }
+                                        });
+                                        showToast('Direct video URL loaded! 🎬');
                                       }
                                     }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`yt-input-${block.id}`) as HTMLInputElement;
-                                    const val = input?.value || '';
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const input = document.getElementById(`universal-video-input-${block.id}`) as HTMLInputElement;
+                                  const val = input?.value.trim() || '';
+                                  if (val) {
                                     const embedId = getYouTubeEmbedId(val);
                                     if (embedId) {
                                       updateBlock(block.id, {
@@ -2436,120 +2235,6 @@ export default function NotionBlockEditor({
                                       });
                                       showToast('YouTube video linked successfully! 📺');
                                     } else {
-                                      showToast('Please enter a valid YouTube video URL ⚠️');
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl border border-rose-700 shadow-xs cursor-pointer"
-                                >
-                                  Load
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {activeTab === 'upload' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Select or drag a video file from your computer (MP4, WebM, etc.). Your video is processed purely in-browser.
-                              </p>
-                              <div 
-                                className="border-2 border-dashed border-cozy-text-dark/20 hover:border-cozy-orange/40 bg-white rounded-xl p-4 text-center cursor-pointer transition relative group"
-                                onClick={() => {
-                                  const fileInput = document.getElementById(`file-input-${block.id}`);
-                                  fileInput?.click();
-                                }}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const file = e.dataTransfer.files?.[0];
-                                  if (file && file.type.startsWith('video/')) {
-                                    const objUrl = URL.createObjectURL(file);
-                                    localVideoFilesCache[block.id] = objUrl;
-                                    updateBlock(block.id, {
-                                      meta: {
-                                        ...meta,
-                                        videoSource: 'file',
-                                        fileName: file.name,
-                                        isEditing: false
-                                      }
-                                    });
-                                    showToast(`Loaded device video: ${file.name} 🎬`);
-                                  } else {
-                                    showToast('Please upload a valid video file ⚠️');
-                                  }
-                                }}
-                              >
-                                <input
-                                  type="file"
-                                  id={`file-input-${block.id}`}
-                                  accept="video/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const objUrl = URL.createObjectURL(file);
-                                      localVideoFilesCache[block.id] = objUrl;
-                                      updateBlock(block.id, {
-                                        meta: {
-                                          ...meta,
-                                          videoSource: 'file',
-                                          fileName: file.name,
-                                          isEditing: false
-                                        }
-                                      });
-                                      showToast(`Loaded device video: ${file.name} 🎬`);
-                                    }
-                                  }}
-                                />
-                                <div className="flex flex-col items-center justify-center gap-1.5">
-                                  <Upload className="text-cozy-text-muted group-hover:text-cozy-orange transition" size={24} />
-                                  <span className="text-[11px] font-bold text-cozy-text-dark">
-                                    Click or drag video file here
-                                  </span>
-                                  <span className="text-[9px] text-cozy-text-muted">
-                                    MP4, WebM, MOV, etc.
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {activeTab === 'url' && (
-                            <div className="space-y-3">
-                              <p className="text-[10px] leading-relaxed text-cozy-text-muted">
-                                Paste any direct MP4 or other video web link below.
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="https://example.com/relaxing-waves.mp4"
-                                  defaultValue={meta.videoUrl || ''}
-                                  id={`url-input-${block.id}`}
-                                  className="flex-1 bg-white border-2 border-cozy-text-dark/10 focus:border-cozy-orange focus:outline-none rounded-xl px-3 py-1.5 text-xs text-cozy-text-dark"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.currentTarget;
-                                      const val = input.value;
-                                      if (val) {
-                                        updateBlock(block.id, {
-                                          meta: {
-                                            ...meta,
-                                            videoSource: 'url',
-                                            videoUrl: val,
-                                            isEditing: false
-                                          }
-                                        });
-                                        showToast('Direct video URL loaded! 🎬');
-                                      }
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`url-input-${block.id}`) as HTMLInputElement;
-                                    const val = input?.value || '';
-                                    if (val) {
                                       updateBlock(block.id, {
                                         meta: {
                                           ...meta,
@@ -2559,17 +2244,17 @@ export default function NotionBlockEditor({
                                         }
                                       });
                                       showToast('Direct video URL loaded! 🎬');
-                                    } else {
-                                      showToast('Please paste a valid video web link ⚠️');
                                     }
-                                  }}
-                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl border border-blue-700 shadow-xs cursor-pointer"
-                                >
-                                  Load
-                                </button>
-                              </div>
+                                  } else {
+                                    showToast('Please enter a link ⚠️');
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 bg-cozy-orange hover:bg-cozy-orange/90 text-white font-black text-xs rounded-xl border border-cozy-orange shadow-xs cursor-pointer transition duration-150 shrink-0"
+                              >
+                                Embed Link
+                              </button>
                             </div>
-                          )}
+                          </div>
                         </div>
                       ) : (
                         <div className="relative group/player rounded-xl overflow-hidden shadow-sm border border-cozy-text-dark/10">
@@ -2661,6 +2346,7 @@ export default function NotionBlockEditor({
                         placeholder="Add a video caption..."
                       />
                     </div>
+                    </div>
                   );
                 })()}
 
@@ -2676,74 +2362,7 @@ export default function NotionBlockEditor({
                   />
                 )}
 
-                {/* 23. FILE ATTACHMENT BLOCK */}
-                {block.type === 'file' && (
-                  <div className="relative w-full max-w-md bg-[#FDFDFD] border-2 border-dashed border-[#E2D1C3] p-3 rounded-2xl flex items-center justify-between gap-2 font-sans shadow-xs select-none hover:bg-[#FDF8F1]/30 transition group/file">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="w-10 h-10 bg-[#96A376]/10 rounded-xl border border-[#96A376]/30 flex items-center justify-center text-[#96A376] shrink-0">
-                        <FileText size={20} />
-                      </div>
-                      <div className="overflow-hidden">
-                        <input
-                          type="text"
-                          value={block.meta?.fileName || block.content || 'Mindfulness_Checklist_Guide.pdf'}
-                          onChange={(e) => {
-                            const newName = e.target.value;
-                            updateBlock(block.id, {
-                              content: newName,
-                              meta: {
-                                ...(block.meta || {}),
-                                fileName: newName
-                              }
-                            });
-                          }}
-                          className="text-xs font-bold text-cozy-text-dark bg-transparent border-none focus:outline-none focus:ring-0 p-0 truncate w-full"
-                          placeholder="File Name"
-                        />
-                        <div className="text-[9px] text-cozy-text-muted font-mono uppercase truncate">
-                          {block.meta?.fileType || 'pdf'} • {block.meta?.fileSize || '2.4 MB'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const types = ['pdf', 'docx', 'mp3', 'zip'];
-                          const sizes = ['2.4 MB', '1.1 MB', '4.8 MB', '15.2 MB'];
-                          const names = ['Mindfulness_Checklist_Guide.pdf', 'Daily_Reflection_Journal.docx', 'Cozy_Ambient_Sounds.mp3', 'Backup_Archive.zip'];
-                          
-                          const curIdx = types.indexOf(block.meta?.fileType || 'pdf');
-                          const nextIdx = (curIdx + 1) % types.length;
-                          
-                          updateBlock(block.id, {
-                            content: names[nextIdx],
-                            meta: {
-                              fileName: names[nextIdx],
-                              fileType: types[nextIdx],
-                              fileSize: sizes[nextIdx]
-                            }
-                          });
-                          showToast(`Switched file attachment to: ${names[nextIdx]}`);
-                        }}
-                        className="px-2 py-1 bg-[#FDF8F1] hover:bg-white text-cozy-text-muted hover:text-cozy-text-dark border border-[#E2D1C3]/60 rounded-xl transition cursor-pointer text-[10px] font-bold"
-                        title="Change File Preset"
-                      >
-                        Preset
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showToast(`Downloading attachment: ${block.meta?.fileName || block.content} 📂`);
-                        }}
-                        className="p-1.5 hover:bg-[#FDF8F1] rounded-xl text-[#96A376] hover:text-[#96A376]/80 border border-[#E2D1C3]/60 bg-white transition cursor-pointer shrink-0 flex items-center justify-center"
-                        title="Download"
-                      >
-                        <FileDown size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
+
 
 
 
@@ -2754,34 +2373,101 @@ export default function NotionBlockEditor({
                   if (filtered.length === 0) return null;
 
                   return (
-                    <div className="absolute left-0 mt-2 bg-white border-2 border-cozy-text-dark rounded-xl shadow-2xl w-64 max-h-56 overflow-y-auto z-40 py-1 font-sans animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-cozy-text-muted font-bold border-b border-[#E2D1C3]/40 flex items-center justify-between">
-                        <span>Rich Notion Components</span>
-                        <span className="text-[8px] lowercase font-normal italic">click or type to select</span>
+                    <motion.div 
+                      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                      transition={{ duration: 0.12, ease: "easeOut" }}
+                      className="absolute left-0 mt-2 bg-white/95 backdrop-blur-md border border-[#E2D1C3] rounded-2xl shadow-[0_12px_36px_-6px_rgba(122,105,86,0.22)] w-72 max-h-64 overflow-hidden z-50 flex flex-col font-sans"
+                    >
+                      {/* Dropdown Header */}
+                      <div className="px-3.5 py-2.5 bg-[#FAF8F1]/60 border-b border-[#E2D1C3]/40 flex items-center justify-between shrink-0">
+                        <span className="text-[9.5px] uppercase tracking-widest text-[#8F7C6E] font-extrabold font-mono">
+                          Rich Components
+                        </span>
+                        <span className="text-[8.5px] font-medium text-[#A69586] italic">
+                          type to search
+                        </span>
                       </div>
-                      {filtered.map((cmd, cmdIdx) => {
-                        const isSelected = slashSelectedIndex === cmdIdx;
-                        return (
-                          <button
-                            key={cmd.type}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()} // Keeps keyboard focus active
-                            onClick={() => executeSlashCommand(block.id, cmd.type as any)}
-                            className={`w-full px-3 py-1.5 text-left flex items-center gap-3 transition duration-150 border-b border-[#E2D1C3]/10 last:border-b-0 ${
-                              isSelected ? 'bg-[#FDF8F1] font-bold border-l-4 border-cozy-orange' : 'hover:bg-[#FDF8F1]/50'
-                            }`}
-                          >
-                            <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0 shadow-xs">
-                              {cmd.icon}
-                            </div>
-                            <div>
-                              <div className="text-[11px] font-bold text-cozy-text-dark">{cmd.label}</div>
-                              <div className="text-[9px] text-cozy-text-muted leading-tight">{cmd.desc}</div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+
+                      {/* Dropdown List Items */}
+                      <div className="flex-1 overflow-y-auto py-1.5 space-y-0.5 max-h-44 custom-scrollbar">
+                        {filtered.map((cmd, cmdIdx) => {
+                          const isSelected = slashSelectedIndex === cmdIdx;
+                          
+                          // Style icons with dynamic color schemes matching the category
+                          const getCmdStyles = (type: string) => {
+                            switch (type) {
+                              case 'h1': case 'h2': case 'h3':
+                                return { bg: 'bg-blue-50/90 text-blue-600 border-blue-100', dot: 'bg-blue-500' };
+                              case 'bullet': case 'number': case 'todo': case 'toggle':
+                                return { bg: 'bg-amber-50/90 text-amber-600 border-amber-100', dot: 'bg-amber-500' };
+                              case 'gallery': case 'video':
+                                return { bg: 'bg-rose-50/90 text-rose-600 border-rose-100', dot: 'bg-rose-500' };
+                              case 'voice': case 'audio':
+                                return { bg: 'bg-violet-50/90 text-violet-600 border-violet-100', dot: 'bg-violet-500' };
+
+                              case 'quote': case 'divider':
+                                return { bg: 'bg-stone-100/90 text-stone-600 border-stone-200', dot: 'bg-stone-500' };
+                              default:
+                                return { bg: 'bg-[#FEFAF3] text-cozy-orange border-amber-100/70', dot: 'bg-cozy-orange' };
+                            }
+                          };
+
+                          const colorStyles = getCmdStyles(cmd.type);
+
+                          return (
+                            <button
+                              key={cmd.type}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()} // Keeps keyboard focus active
+                              onClick={() => executeSlashCommand(block.id, cmd.type as any)}
+                              className={`w-[calc(100%-12px)] mx-1.5 px-2.5 py-2 text-left flex items-center gap-3 transition-all duration-150 rounded-xl ${
+                                isSelected 
+                                  ? 'bg-[#FAF6EB] shadow-xs border border-[#E2D1C3]/60 scale-[1.01]' 
+                                  : 'hover:bg-[#FAF8F1]/40 border border-transparent'
+                              }`}
+                            >
+                              {/* Left Icon with color scheme */}
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 transition-transform duration-200 ${colorStyles.bg} ${
+                                isSelected ? 'scale-105 shadow-2xs' : ''
+                              }`}>
+                                {cmd.icon}
+                              </div>
+
+                              {/* Content area */}
+                              <div className="flex-1 min-w-0 pr-1">
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-[11.5px] font-bold tracking-tight transition-colors ${
+                                    isSelected ? 'text-cozy-text-dark font-black' : 'text-cozy-text-dark/90'
+                                  }`}>
+                                    {cmd.label}
+                                  </span>
+                                  {isSelected && (
+                                    <span className={`w-1.5 h-1.5 rounded-full ${colorStyles.dot} animate-pulse shrink-0`} />
+                                  )}
+                                </div>
+                                <div className="text-[9.5px] text-cozy-text-muted leading-snug mt-0.5 line-clamp-1">
+                                  {cmd.desc}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Dropdown Footer Navigation Hint */}
+                      <div className="bg-[#FAF6EB]/55 border-t border-[#E2D1C3]/30 px-3.5 py-2 text-[8.5px] font-mono text-[#A69586] flex items-center justify-between select-none shrink-0 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1 py-0.5 bg-white border border-[#E2D1C3]/60 rounded-md shadow-3xs font-semibold">↑↓</span>
+                          <span>navigate</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 bg-white border border-[#E2D1C3]/60 rounded-md shadow-3xs font-semibold">⏎</span>
+                          <span>select</span>
+                        </div>
+                      </div>
+                    </motion.div>
                   );
                 })()}
 

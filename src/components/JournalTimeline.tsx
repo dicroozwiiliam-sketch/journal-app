@@ -30,8 +30,7 @@ export interface JournalBlock {
     | 'audio'
     | 'video'
     | 'table'
-    | 'sketch'
-    | 'file'; // 'sketch' from template fallback
+    | 'sketch';
   content: string;
   completed?: boolean;
   indent?: number;
@@ -354,7 +353,7 @@ export default function JournalTimeline({
   };
 
   const handleAddFloatingObject = (
-    type: 'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'decorative' | 'file',
+    type: 'text' | 'emoji' | 'sticker' | 'sticky' | 'image' | 'draw' | 'shape' | 'decorative',
     content: string,
     color = '#EF9A7A',
     meta: any = {}
@@ -775,6 +774,25 @@ export default function JournalTimeline({
     showToast("Share link copied to clipboard! ✨");
   };
 
+  // Scan blocks for gallery images to pass to FloatingCanvas
+  const uniqueGalleryImages = React.useMemo(() => {
+    const images: string[] = [];
+    blocks.forEach(block => {
+      if (block.type === 'gallery' || block.type === 'image') {
+        const meta = block.meta || {};
+        if (meta.urls && Array.isArray(meta.urls)) {
+          images.push(...meta.urls);
+        } else if (meta.url && typeof meta.url === 'string') {
+          images.push(meta.url);
+        }
+        if (block.content && (block.content.startsWith('http') || block.content.startsWith('data:image'))) {
+          images.push(block.content);
+        }
+      }
+    });
+    return Array.from(new Set(images.filter(Boolean)));
+  }, [blocks]);
+
   return (
     <div className="w-full max-w-6xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8" id="journal_tab">
       
@@ -1057,6 +1075,7 @@ export default function JournalTimeline({
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 registerActions={setCanvasActions}
+                galleryImages={uniqueGalleryImages}
               />
 
               {/* INTERACTIVE NOTION BLOCK CANVAS */}
@@ -1065,6 +1084,9 @@ export default function JournalTimeline({
                   blocks={blocks} 
                   onChange={handleUpdateBlocks} 
                   showToast={showToast} 
+                  onAddImageToScrapbook={canvasActions?.spawnObject ? (url: string) => {
+                    canvasActions.spawnObject('image', { content: url, width: 160, height: 160 });
+                  } : undefined}
                 />
               </div>
               

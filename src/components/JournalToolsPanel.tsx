@@ -528,49 +528,12 @@ export default function JournalToolsPanel({
         {/* IMAGES TAB */}
         {activeTab === 'image' && (
           <div className="space-y-3">
-            <div>
-              <p className="text-[10px] font-bold text-cozy-text-muted mb-1.5 uppercase tracking-wider">Custom Image URL</p>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                const url = fd.get('url') as string;
-                if (url) {
-                  canvasActions?.spawnObject('image', { content: url, width: 180, height: 180 });
-                  e.currentTarget.reset();
-                }
-              }} className="flex gap-1.5">
-                <input
-                  type="url"
-                  name="url"
-                  placeholder="Paste image link (https://...)"
-                  className="flex-1 p-1.5 text-xs border border-cozy-text-dark/25 rounded-lg bg-white outline-none"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-3 bg-cozy-orange text-white border-2 border-cozy-text-dark rounded-lg text-[10px] font-black uppercase cursor-pointer hover:bg-opacity-90"
-                >
-                  Add
-                </button>
-              </form>
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-cozy-text-muted uppercase tracking-wider">Preset Nature & Cozy Photos</p>
-              <div className="grid grid-cols-3 gap-2">
-                {PRESET_IMAGES.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => canvasActions?.spawnObject('image', { content: img.url, width: 160, height: 160 })}
-                    className="group relative h-14 rounded-lg overflow-hidden border border-cozy-text-dark/25 cursor-pointer hover:border-cozy-orange transition hover:scale-105"
-                  >
-                    <img src={img.url} alt={img.label} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                      <span className="text-[8px] text-white font-black uppercase tracking-wider text-center px-1">{img.label}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+            <div className="p-3 bg-cozy-bg/50 border-2 border-dashed border-cozy-text-dark/20 rounded-xl text-center space-y-2">
+              <span className="text-xl">📸</span>
+              <p className="text-[10px] font-bold text-cozy-text-dark uppercase tracking-wider">Scrapbook Photo Pinning</p>
+              <p className="text-[9px] text-cozy-text-muted leading-relaxed">
+                Click the image upload button inside any Notion journal block to pin photos directly onto your floating collage canvas!
+              </p>
             </div>
           </div>
         )}

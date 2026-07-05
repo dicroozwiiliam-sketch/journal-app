@@ -473,7 +473,8 @@ export default function VoiceBlock({
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="w-full bg-white border border-[#E2D1C3] p-4 sm:p-5 rounded-2xl shadow-xs font-sans transition-all duration-300">
+    <div className="w-full bg-[#FAF9F6]/20 border border-[#E2D1C3]/60 rounded-2xl p-2 transition-all duration-300 hover:border-cozy-orange/45">
+      <div className="w-full bg-white border border-[#E2D1C3]/40 p-4 sm:p-5 rounded-xl shadow-xs font-sans">
       
       {/* Hidden audio element */}
       {audioUrl && (
@@ -589,31 +590,28 @@ export default function VoiceBlock({
 
       {/* Main interaction content */}
       {!audioUrl && !isRecording ? (
-        // IDLE INITIAL STATE: Click to record placeholder
-        <div className="border-2 border-dashed border-[#E2D1C3] bg-[#FDF8F1]/40 rounded-xl p-6 flex flex-col items-center justify-center text-center">
-          <button
-            type="button"
+        // IDLE INITIAL STATE: Clean and simple click-to-record uploader style
+        <div className="space-y-3">
+          <div 
             onClick={startRecording}
-            className="w-12 h-12 bg-cozy-orange hover:bg-cozy-orange-hover text-white rounded-full flex items-center justify-center shadow-md transform hover:scale-105 transition duration-200"
+            className="border border-dashed border-[#E2D1C3] bg-[#FAF8F1]/40 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#FAF8F1]/80 hover:border-cozy-orange/50 transition-all duration-200 min-h-[140px] space-y-2.5 group/box w-full"
           >
-            <Mic size={20} />
-          </button>
-          <span className="text-xs font-bold text-cozy-text-dark mt-3 select-none">Record a Cozy Voice Memory</span>
-          <span className="text-[10px] text-cozy-text-muted mt-1 select-none max-w-xs">
-            Capture thoughts, melodies, or ambient sounds to include inside your journal flow.
-          </span>
-          <div className="mt-4 flex gap-2">
+            <div className="w-10 h-10 rounded-full bg-amber-50/80 flex items-center justify-center text-cozy-orange border border-amber-100/60 group-hover/box:scale-110 transition-transform duration-200">
+              <Mic size={18} strokeWidth={2.5} />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs font-black text-cozy-text-dark block uppercase tracking-wide font-mono">Record your voice</span>
+              <span className="text-[10px] text-cozy-text-muted block">Click here to start recording using your microphone</span>
+            </div>
+          </div>
+          <div className="flex justify-center">
             <button
-              onClick={startRecording}
-              className="text-[10px] font-bold bg-cozy-orange/10 hover:bg-cozy-orange/20 text-[#D28C5C] px-3 py-1.5 rounded-lg transition"
-            >
-              Start Microphone
-            </button>
-            <button
+              type="button"
               onClick={handleFileUploadClick}
-              className="text-[10px] font-bold border border-[#E2D1C3] hover:bg-white text-cozy-text-muted px-3 py-1.5 rounded-lg transition"
+              className="text-[10px] font-bold text-cozy-text-muted hover:text-[#D28C5C] transition flex items-center gap-1 cursor-pointer"
             >
-              Upload Audio File
+              <Upload size={11} className="text-cozy-orange" />
+              <span>Or upload an audio file (.mp3, .wav, .m4a)</span>
             </button>
           </div>
         </div>
@@ -753,6 +751,7 @@ export default function VoiceBlock({
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }

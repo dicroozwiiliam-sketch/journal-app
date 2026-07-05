@@ -10,12 +10,25 @@ import {
   ChevronRight,
   ChevronLeft,
   X,
-  Plus
+  Plus,
+  Target,
+  MessageSquare,
+  Heart,
+  Award,
+  PlusCircle,
+  Calendar,
+  Compass,
+  CheckSquare,
+  Bookmark
 } from 'lucide-react';
-import { JournalEntry } from '../types';
+import { JournalEntry, Habit, Goal } from '../types';
 
 interface MoodAnalyticsProps {
   entries: JournalEntry[];
+  habits?: Habit[];
+  goals?: Goal[];
+  setGoals?: React.Dispatch<React.SetStateAction<Goal[]>>;
+  setEntries?: React.Dispatch<React.SetStateAction<JournalEntry[]>>;
   onNavigateToEntry?: (id: string) => void;
   onCreatePageForDate?: (date: Date) => void;
   onSaveConvertedEntry?: (entry: JournalEntry) => void;
@@ -24,6 +37,10 @@ interface MoodAnalyticsProps {
 
 export default function MoodAnalytics({ 
   entries,
+  habits = [],
+  goals = [],
+  setGoals,
+  setEntries,
   onNavigateToEntry,
   onCreatePageForDate,
   onSaveConvertedEntry,
@@ -56,6 +73,86 @@ export default function MoodAnalytics({
     };
     realEntry?: JournalEntry;
   } | null>(null);
+
+  // Active index for Monthly Takeaways carousel
+  const [activeTakeawayIndex, setActiveTakeawayIndex] = useState<number>(0);
+
+  // States for Quick Goal Planning and Intention Scheduling within the modal
+  const [activeModalTab, setActiveModalTab] = useState<'info' | 'intention' | 'goal'>('info');
+  const [scheduledIntentionText, setScheduledIntentionText] = useState<string>('');
+  const [newGoalTitle, setNewGoalTitle] = useState<string>('');
+  const [newGoalCategory, setNewGoalCategory] = useState<'Personal' | 'Fitness' | 'Reading' | 'Career' | 'Habit'>('Personal');
+
+  // Filter entries to only real entries within the visible month
+  const monthlyEntries = entries.filter(e => {
+    const d = new Date(e.date);
+    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+  });
+
+  // Calculate most frequent emotion
+  const emotionCounts: Record<string, number> = {};
+  monthlyEntries.forEach(e => {
+    (e.emotions || []).forEach(emo => {
+      emotionCounts[emo] = (emotionCounts[emo] || 0) + 1;
+    });
+  });
+  let mostFrequentEmotion = 'None yet';
+  let maxCount = 0;
+  Object.entries(emotionCounts).forEach(([emo, count]) => {
+    if (count > maxCount) {
+      maxCount = count;
+      mostFrequentEmotion = emo;
+    }
+  });
+
+  // Calculate habit completion rate for the visible month
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  const todayDate = new Date();
+  let daysToCheck = daysInMonth;
+  if (selectedYear === todayDate.getFullYear() && selectedMonth === todayDate.getMonth()) {
+    daysToCheck = todayDate.getDate();
+  } else if (selectedYear > todayDate.getFullYear() || (selectedYear === todayDate.getFullYear() && selectedMonth > todayDate.getMonth())) {
+    daysToCheck = 0; // Future month has 0 elapsed days
+  }
+
+  let totalPossible = habits.length * daysToCheck;
+  let completedCount = 0;
+  if (totalPossible > 0) {
+    habits.forEach(habit => {
+      for (let d = 1; d <= daysToCheck; d++) {
+        const yyyy = selectedYear;
+        const mm = String(selectedMonth + 1).padStart(2, '0');
+        const dd = String(d).padStart(2, '0');
+        const dateKey = `${yyyy}-${mm}-${dd}`;
+        if (habit.history[dateKey]) {
+          completedCount++;
+        }
+      }
+    });
+  }
+  const habitCompletionRate = totalPossible > 0 ? Math.round((completedCount / totalPossible) * 100) : 0;
+
+  // Calculate unique monthly takeaways
+  const monthlyTakeaways: string[] = [];
+  monthlyEntries.forEach(e => {
+    (e.takeaways || []).forEach(t => {
+      if (t && !monthlyTakeaways.includes(t)) {
+        monthlyTakeaways.push(t);
+      }
+    });
+  });
+
+  // Filter active goals due in the visible month
+  const targetPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+  const monthlyGoals = (goals || []).filter(g => g.deadline.startsWith(targetPrefix));
+
+  // Reset modal state when the selected date changes
+  useEffect(() => {
+    setActiveModalTab('info');
+    setScheduledIntentionText('');
+    setNewGoalTitle('');
+    setNewGoalCategory('Personal');
+  }, [selectedDateDetail?.day, selectedDateDetail?.month, selectedDateDetail?.year]);
 
   // Sync calendar view when a specific target date is passed (e.g., when clicking "View on Calendar" from a journal page)
   useEffect(() => {
@@ -359,6 +456,24 @@ export default function MoodAnalytics({
     };
   };
 
+  const getMoodCategory = (moodStr?: string): 'peaceful' | 'excited' | 'tired' | 'stressed' | 'neutral' => {
+    if (!moodStr) return 'neutral';
+    const m = moodStr.toLowerCase();
+    if (m.includes('peaceful') || m.includes('calm') || m.includes('good') || m.includes('reflective') || m.includes('positive') || m.includes('balance') || m.includes('content') || m.includes('tranquil') || m.includes('satisfaction') || m.includes('patience') || m.includes('composure') || m.includes('serene')) {
+      return 'peaceful';
+    }
+    if (m.includes('excited') || m.includes('happy') || m.includes('great') || m.includes('joy') || m.includes('energetic') || m.includes('focus') || m.includes('creative') || m.includes('pride') || m.includes('inspiration')) {
+      return 'excited';
+    }
+    if (m.includes('tired') || m.includes('exhausted') || m.includes('hard') || m.includes('fatigue') || m.includes('muted') || m.includes('sluggish') || m.includes('weak')) {
+      return 'tired';
+    }
+    if (m.includes('stressed') || m.includes('anxious') || m.includes('sad') || m.includes('overwhelmed') || m.includes('vulnerable') || m.includes('anxiety') || m.includes('fear') || m.includes('worry')) {
+      return 'stressed';
+    }
+    return 'peaceful'; // Default fallback for general positive/reflective mood
+  };
+
   const getDaysForMonthGrid = (year: number, month: number) => {
     // get number of days in the current month
     const numDays = new Date(year, month + 1, 0).getDate();
@@ -409,7 +524,7 @@ export default function MoodAnalytics({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8 pb-20" id="analytics_tab">
+    <div className="w-full max-w-6xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-6 pb-20" id="analytics_tab">
       
       {/* Header */}
       <div className="mb-6">
@@ -417,8 +532,10 @@ export default function MoodAnalytics({
         <p className="text-xs text-cozy-text-muted font-bold">Your reflections calendar, agenda and cognitive emotional insights</p>
       </div>
 
-      {/* RENDER COZY CALENDAR VIEW */}
-      <div className="max-w-2xl mx-auto w-full bg-[#FCF8F2] border-2 xs:border-3 border-cozy-text-dark rounded-2xl xs:rounded-3xl p-2.5 xs:p-4 sm:p-5 md:p-6 shadow-sm">
+      {/* Main Grid Wrapper */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
+        {/* Left Column: Calendar (col-span-8) */}
+        <div className="lg:col-span-8 w-full bg-[#FCF8F2] border-2 xs:border-3 border-cozy-text-dark rounded-2xl xs:rounded-3xl p-2.5 xs:p-4 sm:p-5 md:p-6 shadow-sm">
             {/* Header of Calendar: Icon, Title & Top Controls */}
             <div className="flex flex-row items-center justify-between gap-2 border-b border-[#4A3D30]/10 pb-4 mb-4">
               <div className="flex items-center gap-2 xs:gap-3.5">
@@ -511,29 +628,35 @@ export default function MoodAnalytics({
                 const cellProgress = getProgressForDate(cell.day, cell.month, cell.year);
                 const streakLength = getStreakLengthAtDate(cell.day, cell.month, cell.year);
 
-                // Determine blooming styling based on consecutive writing streak length
+                // Determine styling based on daily mood heatmap or streak length
+                const isActive = isDateActive(cell.day, cell.month, cell.year);
+                const moodValue = dateDetail.realEntry?.mood || dateDetail.simulatedContent?.mood;
+                const moodCategory = isActive ? getMoodCategory(moodValue) : 'neutral';
+
                 let cellStyle = '';
                 if (isSelected) {
-                  cellStyle = 'border-cozy-orange bg-[#FFFDF9] scale-102 ring-3 ring-cozy-orange/25 font-black shadow-md';
+                  cellStyle = 'border-cozy-orange bg-[#FFFDF9] scale-102 ring-3 ring-cozy-orange/25 font-black shadow-md z-10';
                 } else if (isToday) {
-                  cellStyle = 'border-[#E08E6D] bg-[#FCF8F2] shadow-sm font-black';
+                  cellStyle = 'border-[#E08E6D] bg-[#FCF8F2] shadow-xs font-black z-10';
                 } else if (cell.isCurrentMonth) {
-                  if (streakLength === 0) {
-                    // Missed days are completely blank, quiet and peaceful
-                    cellStyle = 'bg-white border-[#FAF6EB] hover:border-[#4A3D30]/15 text-[#7A6956]/40 hover:scale-[1.01]';
-                  } else if (streakLength === 1) {
-                    cellStyle = 'bg-[#F4F8F1] border-[#DFEBD5] text-emerald-950 hover:bg-[#EDF3E8] hover:border-[#D5E4C4] hover:scale-[1.01]';
-                  } else if (streakLength <= 3) {
-                    cellStyle = 'bg-[#EBF5EC] border-[#D3ECD6] text-emerald-950 hover:bg-[#DFF1E1] hover:border-[#C1E5C6] hover:scale-[1.01] font-black';
-                  } else if (streakLength <= 5) {
-                    cellStyle = 'bg-[#FAF0ED] border-[#F0D5CD] text-amber-950 hover:bg-[#F7E7E2] hover:border-[#E7C1B5] hover:scale-[1.01] font-black';
-                  } else if (streakLength <= 7) {
-                    cellStyle = 'bg-[#FCF9EC] border-[#F2E8BC] text-amber-950 hover:bg-[#FAF5E0] hover:border-[#EADAA0] hover:scale-[1.01] font-black';
+                  if (isActive) {
+                    if (moodCategory === 'peaceful') {
+                      cellStyle = 'bg-[#FDF6E2] border-[#E6D4AF] text-[#5D4E3C] shadow-[0_0_12px_rgba(230,212,175,0.4)] hover:bg-[#FAF1D6] hover:scale-[1.01]';
+                    } else if (moodCategory === 'excited') {
+                      cellStyle = 'bg-[#FFEFE2] border-[#F3C5A5] text-[#7C4015] shadow-[0_0_12px_rgba(243,197,165,0.5)] hover:bg-[#FFE3CE] hover:scale-[1.01] font-black';
+                    } else if (moodCategory === 'tired') {
+                      cellStyle = 'bg-[#EFF2F5] border-[#C2CBD6] text-[#414E5E] shadow-[0_0_12px_rgba(194,203,214,0.4)] hover:bg-[#E3E8EE] hover:scale-[1.01]';
+                    } else if (moodCategory === 'stressed') {
+                      cellStyle = 'bg-[#FFF0F0] border-[#F3B7BA] text-[#823337] shadow-[0_0_12px_rgba(243,183,186,0.5)] hover:bg-[#FEDBDD] hover:scale-[1.01] font-black';
+                    } else {
+                      cellStyle = 'bg-white border-[#FAF6EB] text-[#7A6956]/40 hover:border-[#4A3D30]/15 hover:scale-[1.01]';
+                    }
                   } else {
-                    cellStyle = 'bg-gradient-to-br from-[#F5F2FC] to-[#FAF8FD] border-[#DBCFF1] text-indigo-950 hover:from-[#EDE6F9] hover:border-[#CDBDE5] hover:scale-[1.01] font-black';
+                    // Missed days are clean and quiet
+                    cellStyle = 'bg-white/80 border-[#FAF6EB] text-[#7A6956]/40 hover:bg-[#FCFBF7] hover:border-[#4A3D30]/15 hover:scale-[1.01]';
                   }
                 } else {
-                  cellStyle = 'bg-[#FAF6EB]/30 border-transparent text-[#7A6956]/20 pointer-events-none';
+                  cellStyle = 'bg-[#FAF6EB]/20 border-transparent text-[#7A6956]/15 pointer-events-none';
                 }
 
                 return (
@@ -555,15 +678,41 @@ export default function MoodAnalytics({
                   >
                     {/* Day Number and Bloom Flower */}
                     <div className="flex justify-between items-start w-full">
-                      {isToday ? (
-                        <div className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 rounded-full bg-[#E08E6D] text-white flex items-center justify-center font-black text-[10px] xs:text-xs sm:text-sm shadow-xs">
-                          {cell.day}
-                        </div>
-                      ) : (
-                        <span className={`text-[10px] xs:text-xs font-black ${cell.isCurrentMonth ? 'text-[#4A3D30]' : 'text-[#7A6956]/20'}`}>
-                          {cell.day}
-                        </span>
-                      )}
+                      <div className="flex flex-col items-start gap-1">
+                        {isToday ? (
+                          <div className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 rounded-full bg-[#E08E6D] text-white flex items-center justify-center font-black text-[10px] xs:text-xs sm:text-sm shadow-xs">
+                            {cell.day}
+                          </div>
+                        ) : (
+                          <span className={`text-[10px] xs:text-xs font-black ${cell.isCurrentMonth ? 'text-[#4A3D30]' : 'text-[#7A6956]/20'}`}>
+                            {cell.day}
+                          </span>
+                        )}
+
+                        {/* Miniature visual track of daily habits */}
+                        {cell.isCurrentMonth && habits.length > 0 && (
+                          <div className="flex flex-wrap gap-0.5 max-w-[36px] xs:max-w-[48px] sm:max-w-[60px] mt-0.5" title="Daily Habits Consistency">
+                            {habits.map((habit) => {
+                              const yyyy = cell.year;
+                              const mm = String(cell.month + 1).padStart(2, '0');
+                              const dd = String(cell.day).padStart(2, '0');
+                              const dateKey = `${yyyy}-${mm}-${dd}`;
+                              const isCompleted = !!habit.history[dateKey];
+                              return (
+                                <span
+                                  key={habit.id}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all duration-300 border ${
+                                    isCompleted 
+                                      ? 'bg-emerald-500 border-emerald-600/30 shadow-xs shadow-emerald-500/30' 
+                                      : 'bg-[#4A3D30]/10 border-transparent opacity-30'
+                                  }`}
+                                  title={`${habit.name}: ${isCompleted ? '✓ Completed' : '✗ Incomplete'}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Blooming flower matching streak length */}
                       {cell.isCurrentMonth && streakLength > 0 && (
@@ -645,8 +794,163 @@ export default function MoodAnalytics({
                 <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#99BECC]" />
                 <span>Notes Only</span>
               </div>
+              <div className="flex items-center gap-1 border-l border-[#4A3D30]/15 pl-2.5">
+                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-emerald-500" />
+                <span>Habit Done</span>
+              </div>
+            </div>
+
+            {/* Heatmap Mood Color Indicators */}
+            <div className="mt-4 p-2.5 bg-white/45 border border-[#4A3D30]/10 rounded-2xl flex flex-col gap-2">
+              <div className="text-[9px] font-black uppercase tracking-wider text-[#7A6956] text-center">
+                🎨 Monthly Mood Heatmap & Well-Being Glow
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[9px] font-black text-[#4A3D30] uppercase tracking-wide">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#FDF6E2] border border-[#E6D4AF] shadow-[0_0_8px_rgba(230,212,175,0.4)] shrink-0" />
+                  <span>Peaceful / Calm</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#FFEFE2] border border-[#F3C5A5] shadow-[0_0_8px_rgba(243,197,165,0.5)] shrink-0" />
+                  <span>Excited / Happy</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#EFF2F5] border border-[#C2CBD6] shadow-[0_0_8px_rgba(194,203,214,0.4)] shrink-0" />
+                  <span>Tired / Exhausted</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#FFF0F0] border border-[#F3B7BA] shadow-[0_0_8px_rgba(243,183,186,0.5)] shrink-0" />
+                  <span>Stressed / Anxious</span>
+                </div>
+              </div>
             </div>
         </div>
+
+        {/* Right Column: Monthly Summary Sidebar (col-span-4) */}
+        <div className="lg:col-span-4 w-full flex flex-col gap-5">
+          {/* Month Overview Card */}
+          <div className="bg-[#FAF6EB] border-2 xs:border-3 border-cozy-text-dark rounded-2xl xs:rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#4A3D30]/10 pb-3">
+              <Compass className="text-cozy-orange shrink-0" size={20} strokeWidth={2.5} />
+              <div>
+                <h3 className="text-sm font-black text-[#4A3D30] uppercase tracking-wider font-mono leading-none">
+                  {monthNames[selectedMonth]} Stats
+                </h3>
+                <p className="text-[10px] text-[#7A6956] font-bold mt-1">Visible Month Overview</p>
+              </div>
+            </div>
+
+            {/* Stat Counters Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
+              {/* Stat 1: Total Journals */}
+              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-9 h-9 bg-cozy-orange/10 rounded-xl flex items-center justify-center shrink-0">
+                  <MessageSquare className="text-cozy-orange" size={16} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Journals Spoken</div>
+                  <div className="text-base font-black text-cozy-text-dark leading-tight mt-1">{monthlyEntries.length} entries</div>
+                </div>
+              </div>
+
+              {/* Stat 2: Top Emotion */}
+              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-9 h-9 bg-cozy-yellow/20 rounded-xl flex items-center justify-center shrink-0">
+                  <Heart className="text-amber-700" size={16} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Top Emotion</div>
+                  <div className="text-sm font-black text-cozy-text-dark leading-tight mt-1 truncate max-w-[140px]">{mostFrequentEmotion}</div>
+                </div>
+              </div>
+
+              {/* Stat 3: Habit Rate */}
+              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                  <Award className="text-emerald-600" size={16} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Habit Streak Met</div>
+                  <div className="text-base font-black text-cozy-text-dark leading-tight mt-1">{habitCompletionRate}% done</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Takeaways Carousel Section */}
+            <div className="bg-white/60 border-2 border-[#4A3D30]/10 p-3 rounded-2xl space-y-2 relative">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-black text-[#7A6956] uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles size={11} className="text-cozy-orange" />
+                  <span>Monthly Takeaways</span>
+                </h4>
+                {monthlyTakeaways.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setActiveTakeawayIndex(prev => (prev === 0 ? monthlyTakeaways.length - 1 : prev - 1))}
+                      className="p-1 hover:bg-black/5 rounded-md text-cozy-text-dark transition cursor-pointer"
+                    >
+                      <ChevronLeft size={10} strokeWidth={3} />
+                    </button>
+                    <span className="text-[9px] font-bold text-cozy-text-muted font-mono">
+                      {activeTakeawayIndex + 1}/{monthlyTakeaways.length}
+                    </span>
+                    <button 
+                      onClick={() => setActiveTakeawayIndex(prev => (prev === monthlyTakeaways.length - 1 ? 0 : prev + 1))}
+                      className="p-1 hover:bg-black/5 rounded-md text-cozy-text-dark transition cursor-pointer"
+                    >
+                      <ChevronRight size={10} strokeWidth={3} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {monthlyTakeaways.length > 0 ? (
+                <div className="bg-white border border-[#4A3D30]/10 p-2.5 rounded-xl text-[10px] text-cozy-text-dark leading-relaxed font-semibold italic min-h-[48px] flex items-center">
+                  "{monthlyTakeaways[activeTakeawayIndex] || monthlyTakeaways[0]}"
+                </div>
+              ) : (
+                <div className="bg-white/40 border border-dashed border-[#4A3D30]/15 p-2.5 rounded-xl text-[10px] text-cozy-text-muted font-bold text-center">
+                  No core takeaways extracted this month yet. Keep reflecting!
+                </div>
+              )}
+            </div>
+
+            {/* Active Goals due this month */}
+            <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl space-y-2">
+              <h4 className="text-[10px] font-black text-[#7A6956] uppercase tracking-wider flex items-center gap-1">
+                <Target size={12} className="text-cozy-orange" />
+                <span>Month Milestones ({monthlyGoals.length})</span>
+              </h4>
+
+              {monthlyGoals.length > 0 ? (
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {monthlyGoals.map(goal => (
+                    <div key={goal.id} className="p-2 bg-[#FCF8F2] border border-[#4A3D30]/15 rounded-xl space-y-1">
+                      <div className="flex justify-between items-start gap-1">
+                        <span className="text-[10px] font-black text-[#4A3D30] line-clamp-1">{goal.title}</span>
+                        <span className="text-[8px] font-mono font-black uppercase px-1 py-0.5 rounded bg-cozy-orange/15 text-cozy-orange border border-cozy-orange/20 shrink-0">
+                          {goal.category}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-white border border-[#4A3D30]/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-cozy-orange rounded-full" style={{ width: `${goal.progress}%` }} />
+                        </div>
+                        <span className="text-[8px] font-black text-[#7A6956] shrink-0 font-mono">{goal.progress}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[10px] text-cozy-text-muted font-bold py-1 text-center leading-normal">
+                  No goal milestone set for this month.<br/>
+                  <span className="text-[9px] text-cozy-orange font-black">💡 Click any calendar date to set a target!</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* DETAIL MODAL POPUP FOR SELECTED DATE */}
       {selectedDateDetail && (
@@ -665,6 +969,38 @@ export default function MoodAnalytics({
             <p className="text-xs text-[#7A6956] font-bold border-b border-[#4A3D30]/10 pb-3 mb-4">
               {monthNames[selectedDateDetail.month]} {selectedDateDetail.day}, {selectedDateDetail.year}
             </p>
+
+            {/* Habits of the Day Section */}
+            {habits.length > 0 && (
+              <div className="mb-4 bg-white/60 border-2 border-[#4A3D30]/15 rounded-2xl p-3">
+                <h4 className="text-[10px] font-black text-[#7A6956] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span>🎯</span>
+                  <span>Habits Tracked for this Day</span>
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {habits.map((habit) => {
+                    const yyyy = selectedDateDetail.year;
+                    const mm = String(selectedDateDetail.month + 1).padStart(2, '0');
+                    const dd = String(selectedDateDetail.day).padStart(2, '0');
+                    const dateKey = `${yyyy}-${mm}-${dd}`;
+                    const isCompleted = !!habit.history[dateKey];
+                    return (
+                      <div
+                        key={habit.id}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-black transition-all ${
+                          isCompleted
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                            : 'bg-stone-50 border-stone-200 text-stone-400 opacity-60'
+                        }`}
+                      >
+                        <span className="text-xs leading-none">{isCompleted ? '🟢' : '⚪'}</span>
+                        <span>{habit.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {selectedDateDetail.dots.length > 0 ? (
               <div className="space-y-4">
@@ -772,23 +1108,201 @@ export default function MoodAnalytics({
                 </div>
               </div>
             ) : (
-              <div className="text-center py-6">
-                <p className="text-sm font-bold text-[#7A6956] italic mb-4">
-                  "Your calendar is a blank page today. Savor the quiet space."
-                </p>
-                <p className="text-xs text-[#7A6956] leading-normal font-semibold mb-6">
-                  No reflection has been spoken or typed for this date yet. Daily habits and slow, deliberate pauses are beautiful steps of mindfulness.
-                </p>
-                <button
-                  onClick={() => {
-                    const targetDate = new Date(selectedDateDetail.year, selectedDateDetail.month, selectedDateDetail.day, 12, 0, 0);
-                    setSelectedDateDetail(null);
-                    onCreatePageForDate?.(targetDate);
-                  }}
-                  className="px-5 py-2.5 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer"
-                >
-                  Create a New Reflection
-                </button>
+              <div className="space-y-4">
+                {/* Mode Tabs */}
+                <div className="flex border-2 border-[#4A3D30] rounded-xl overflow-hidden bg-white shadow-xs">
+                  <button
+                    onClick={() => setActiveModalTab('info')}
+                    className={`flex-1 text-[10px] font-black uppercase py-2 transition-all cursor-pointer ${
+                      activeModalTab === 'info' 
+                        ? 'bg-cozy-orange text-white' 
+                        : 'bg-white hover:bg-[#FCF8F2] text-[#4A3D30]'
+                    }`}
+                  >
+                    💡 Overview
+                  </button>
+                  <button
+                    onClick={() => setActiveModalTab('intention')}
+                    className={`flex-1 text-[10px] font-black uppercase py-2 transition-all cursor-pointer border-l-2 border-r-2 border-[#4A3D30] ${
+                      activeModalTab === 'intention' 
+                        ? 'bg-cozy-orange text-white' 
+                        : 'bg-white hover:bg-[#FCF8F2] text-[#4A3D30]'
+                    }`}
+                  >
+                    📝 Schedule
+                  </button>
+                  <button
+                    onClick={() => setActiveModalTab('goal')}
+                    className={`flex-1 text-[10px] font-black uppercase py-2 transition-all cursor-pointer ${
+                      activeModalTab === 'goal' 
+                        ? 'bg-cozy-orange text-white' 
+                        : 'bg-white hover:bg-[#FCF8F2] text-[#4A3D30]'
+                    }`}
+                  >
+                    🎯 Goal
+                  </button>
+                </div>
+
+                {/* Tab content */}
+                {activeModalTab === 'info' && (
+                  <div className="text-center py-2 space-y-4">
+                    <p className="text-sm font-bold text-[#7A6956] italic">
+                      "Your calendar is a blank page today. Savor the quiet space."
+                    </p>
+                    <p className="text-xs text-[#7A6956] leading-normal font-semibold">
+                      No reflection has been spoken or typed for this date yet. Savor this blank canvas, schedule future intentions, or set milestone goals!
+                    </p>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => {
+                          const targetDate = new Date(selectedDateDetail.year, selectedDateDetail.month, selectedDateDetail.day, 12, 0, 0);
+                          setSelectedDateDetail(null);
+                          onCreatePageForDate?.(targetDate);
+                        }}
+                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                      >
+                        <Plus size={14} strokeWidth={3} />
+                        <span>Create Blank Reflection Page</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveModalTab('intention')}
+                        className="w-full py-2.5 bg-white hover:bg-[#FAF6EB] text-[#4A3D30] font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono"
+                      >
+                        ✍ Schedule Spoken Diary Intention
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeModalTab === 'intention' && (
+                  <div className="space-y-4 py-1">
+                    <div>
+                      <h4 className="text-xs font-black text-[#4A3D30] uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <Bookmark size={12} className="text-cozy-orange" />
+                        <span>Schedule Spoken Intention</span>
+                      </h4>
+                      <p className="text-[11px] text-[#7A6956] leading-normal font-semibold">
+                        Write a future placeholder topic or thought. This creates a glowing calendar placeholder target you can record later!
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={scheduledIntentionText}
+                        onChange={(e) => setScheduledIntentionText(e.target.value)}
+                        placeholder="e.g., Speak about mindfulness, Career plan, Weekly wrap-up"
+                        className="w-full bg-white border-2 border-[#4A3D30] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-cozy-text-dark outline-none transition"
+                      />
+                      
+                      <button
+                        onClick={() => {
+                          if (!scheduledIntentionText.trim()) return;
+                          const simDate = new Date(selectedDateDetail.year, selectedDateDetail.month, selectedDateDetail.day, 12, 0, 0);
+                          const newEntry: JournalEntry = {
+                            id: `entry-scheduled-${Date.now()}`,
+                            date: simDate.toISOString(),
+                            duration: 0,
+                            transcript: `[Scheduled Spoken Diary]`,
+                            summary: scheduledIntentionText.trim(),
+                            mood: 'Peaceful',
+                            moodEmoji: '🌱',
+                            topics: ['Intention', 'Scheduled'],
+                            tags: ['Scheduled'],
+                            emotions: ['Intentional'],
+                            takeaways: [`Scheduled: "${scheduledIntentionText.trim()}"`]
+                          };
+
+                          setEntries?.(prev => [newEntry, ...prev]);
+                          setSelectedDateDetail(null);
+                        }}
+                        disabled={!scheduledIntentionText.trim()}
+                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                      >
+                        <PlusCircle size={14} />
+                        <span>Schedule Intention</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeModalTab === 'goal' && (
+                  <div className="space-y-4 py-1">
+                    <div>
+                      <h4 className="text-xs font-black text-[#4A3D30] uppercase tracking-wide mb-1 flex items-center gap-1">
+                        <Target size={12} className="text-cozy-orange" />
+                        <span>Set Milestone Goal Target</span>
+                      </h4>
+                      <p className="text-[11px] text-[#7A6956] leading-normal font-semibold">
+                        Create a Milestone Goal. Its deadline will automatically be locked to this date!
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-[#7A6956] tracking-wider mb-1 block">Goal Title</label>
+                        <input
+                          type="text"
+                          value={newGoalTitle}
+                          onChange={(e) => setNewGoalTitle(e.target.value)}
+                          placeholder="e.g., Run 5 Miles, Finish Reading Chapter 4"
+                          className="w-full bg-white border-2 border-[#4A3D30] rounded-xl px-3 py-2 text-xs font-semibold text-cozy-text-dark outline-none transition"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-[#7A6956] tracking-wider mb-1 block">Category</label>
+                        <select
+                          value={newGoalCategory}
+                          onChange={(e: any) => setNewGoalCategory(e.target.value)}
+                          className="w-full bg-white border-2 border-[#4A3D30] rounded-xl px-3 py-2 text-xs font-black text-[#4A3D30] outline-none transition cursor-pointer"
+                        >
+                          <option value="Personal">🌱 Personal</option>
+                          <option value="Fitness">💪 Fitness</option>
+                          <option value="Reading">📚 Reading</option>
+                          <option value="Career">💼 Career</option>
+                          <option value="Habit">⭐ Habit</option>
+                        </select>
+                      </div>
+
+                      <div className="bg-white/45 border border-[#4A3D30]/10 rounded-xl p-2.5">
+                        <div className="text-[9px] font-black uppercase text-[#7A6956] tracking-wide">Automatic Deadline</div>
+                        <div className="text-xs font-black text-[#4A3D30] font-mono mt-0.5">
+                          {selectedDateDetail.year}-{String(selectedDateDetail.month + 1).padStart(2, '0')}-{String(selectedDateDetail.day).padStart(2, '0')}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (!newGoalTitle.trim()) return;
+                          const mm = String(selectedDateDetail.month + 1).padStart(2, '0');
+                          const dd = String(selectedDateDetail.day).padStart(2, '0');
+                          const formattedDeadline = `${selectedDateDetail.year}-${mm}-${dd}`;
+                          const newGoal: Goal = {
+                            id: `goal-${Date.now()}`,
+                            title: newGoalTitle.trim(),
+                            category: newGoalCategory,
+                            progress: 0,
+                            deadline: formattedDeadline,
+                            actions: [
+                              'Break this milestone goal down into 3 simple daily steps',
+                              'Speak about this goal in your voice journal to log thoughts',
+                              'Review progress each Sunday evening'
+                            ]
+                          };
+
+                          setGoals?.(prev => [newGoal, ...prev]);
+                          setSelectedDateDetail(null);
+                        }}
+                        disabled={!newGoalTitle.trim()}
+                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                      >
+                        <PlusCircle size={14} />
+                        <span>Save Milestone Goal</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
