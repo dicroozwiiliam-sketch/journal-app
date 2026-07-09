@@ -77,6 +77,51 @@ export default function MoodAnalytics({
   // Active index for Monthly Takeaways carousel
   const [activeTakeawayIndex, setActiveTakeawayIndex] = useState<number>(0);
 
+  // States for AI Life Analyst Insights
+  const [insightsTimeframe, setInsightsTimeframe] = useState<'day' | 'week' | 'month' | 'year'>('week');
+  const [insights, setInsights] = useState<{
+    summary: string;
+    improvements: string[];
+    activities: string[];
+    emotionalTrend: string;
+    suggestions: string[];
+    growthScore: number;
+  } | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState<boolean>(false);
+  const [errorInsights, setErrorInsights] = useState<string | null>(null);
+
+  const fetchInsights = async (tf: 'day' | 'week' | 'month' | 'year') => {
+    setLoadingInsights(true);
+    setErrorInsights(null);
+    try {
+      const res = await fetch("/api/ai/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          timeframe: tf,
+          entries: entries,
+          habits: habits,
+          goals: goals
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInsights(data);
+      } else {
+        const errData = await res.json();
+        setErrorInsights(errData.error || "Failed to load insights.");
+      }
+    } catch (err) {
+      setErrorInsights("Network or server connection issue.");
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInsights(insightsTimeframe);
+  }, [insightsTimeframe, entries.length, habits.length, goals.length]);
+
   // States for Quick Goal Planning and Intention Scheduling within the modal
   const [activeModalTab, setActiveModalTab] = useState<'info' | 'intention' | 'goal'>('info');
   const [scheduledIntentionText, setScheduledIntentionText] = useState<string>('');
@@ -524,40 +569,54 @@ export default function MoodAnalytics({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-6 pb-20" id="analytics_tab">
+    <div className="w-full max-w-7xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 md:p-8 pb-20" id="analytics_tab">
       
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 space-y-1.5">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-cozy-orange/10 text-cozy-orange border border-cozy-orange/20">
+          <Calendar size={11} strokeWidth={2.5} />
+          <span>Analytics & History</span>
+        </div>
         <h2 className="text-2xl font-black tracking-tight text-cozy-text-dark">Calendar & Insights</h2>
         <p className="text-xs text-cozy-text-muted font-bold">Your reflections calendar, agenda and cognitive emotional insights</p>
       </div>
 
       {/* Main Grid Wrapper */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
-        {/* Left Column: Calendar (col-span-8) */}
-        <div className="lg:col-span-8 w-full bg-[#FCF8F2] border-2 xs:border-3 border-cozy-text-dark rounded-2xl xs:rounded-3xl p-2.5 xs:p-4 sm:p-5 md:p-6 shadow-sm">
+        {/* Left Column: Calendar (col-span-7/8) */}
+        <div className="lg:col-span-7 xl:col-span-8 w-full relative mt-6 pt-8 bg-[#FCF8F2] border-3 border-cozy-text-dark rounded-3xl p-3.5 xs:p-5 sm:p-6 md:p-8 shadow-md cozy-shadow" style={{ backgroundImage: 'radial-gradient(#E2D1C3 1px, transparent 1px)', backgroundSize: '18px 18px' }}>
+            {/* Spiral Binder Rings Aesthetic */}
+            <div className="absolute -top-3.5 left-4 right-4 sm:left-6 sm:right-6 flex justify-between pointer-events-none z-10 select-none">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center">
+                  <div className="w-2.5 h-6 bg-gradient-to-r from-gray-400 via-gray-100 to-gray-500 rounded-full border border-cozy-text-dark shadow-xs" />
+                  <div className="w-1.5 h-1.5 bg-[#4A3E31] rounded-full -mt-0.5" />
+                </div>
+              ))}
+            </div>
+
             {/* Header of Calendar: Icon, Title & Top Controls */}
-            <div className="flex flex-row items-center justify-between gap-2 border-b border-[#4A3D30]/10 pb-4 mb-4">
-              <div className="flex items-center gap-2 xs:gap-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#4A3D30]/10 pb-4 mb-4">
+              <div className="flex items-center gap-3">
                 {/* Cute Calendar Icon Sheet matching the image */}
-                <div className="w-10 h-10 xs:w-12 xs:h-12 bg-[#FCF8F2] border-2 border-cozy-text-dark rounded-xl xs:rounded-2xl flex flex-col items-center justify-center p-0.5 xs:p-1 relative shadow-sm shrink-0">
-                  <div className="absolute top-1 xs:top-1.5 flex gap-0.5 xs:gap-1 justify-center w-full">
-                    <div className="w-0.5 xs:w-1 h-1.5 xs:h-2 bg-cozy-text-dark rounded-full" />
-                    <div className="w-0.5 xs:w-1 h-1.5 xs:h-2 bg-cozy-text-dark rounded-full" />
-                    <div className="w-0.5 xs:w-1 h-1.5 xs:h-2 bg-cozy-text-dark rounded-full" />
+                <div className="w-12 h-12 bg-[#FCF8F2] border-2 border-cozy-text-dark rounded-2xl flex flex-col items-center justify-center p-1 relative shadow-sm shrink-0">
+                  <div className="absolute top-1.5 flex gap-1 justify-center w-full">
+                    <div className="w-1 h-2 bg-cozy-text-dark rounded-full" />
+                    <div className="w-1 h-2 bg-cozy-text-dark rounded-full" />
+                    <div className="w-1 h-2 bg-cozy-text-dark rounded-full" />
                   </div>
-                  <div className="text-[8px] xs:text-[9px] text-[#E08E6D] font-black mt-1.5 xs:mt-2 leading-none uppercase tracking-wider">REF</div>
-                  <div className="text-xs xs:text-sm font-black text-cozy-text-dark leading-none mt-0.5 xs:mt-1">{today.getDate()}</div>
+                  <div className="text-[9px] text-[#E08E6D] font-black mt-2 leading-none uppercase tracking-wider font-mono">REF</div>
+                  <div className="text-sm font-black text-cozy-text-dark leading-none mt-1">{today.getDate()}</div>
                 </div>
                 
                 <div>
-                  <h3 className="text-base xs:text-xl font-black text-[#4A3D30] tracking-tight">Calendar</h3>
-                  <p className="text-[10px] xs:text-xs text-[#7A6956] font-bold">Your reflections.</p>
+                  <h3 className="text-xl font-black text-[#4A3D30] tracking-tight">Calendar</h3>
+                  <p className="text-xs text-[#7A6956] font-bold">Your reflections.</p>
                 </div>
               </div>
 
               {/* Today, Left/Right controls */}
-              <div className="flex items-center gap-1 xs:gap-1.5">
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
                 <button 
                   onClick={() => {
                     const t = new Date();
@@ -574,49 +633,47 @@ export default function MoodAnalytics({
                       simulatedContent: details.simulatedContent
                     });
                   }}
-                  className="px-2.5 py-1 xs:px-4 xs:py-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-lg xs:rounded-xl text-[10px] xs:text-xs font-black text-cozy-text-dark transition hover:scale-102 active:scale-98 cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl text-xs font-black text-cozy-text-dark transition hover:scale-105 active:scale-95 cursor-pointer shadow-xs cozy-shadow-sm"
                 >
                   Today
                 </button>
                 <button 
                   onClick={handlePrevMonth}
-                  className="p-1 xs:p-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-lg xs:rounded-xl text-cozy-text-dark transition hover:scale-102 active:scale-98 cursor-pointer flex items-center justify-center shadow-xs"
+                  className="p-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl text-cozy-text-dark transition hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shadow-xs cozy-shadow-sm"
                   title="Previous Month"
                 >
-                  <ChevronLeft size={12} strokeWidth={3} className="xs:hidden" />
-                  <ChevronLeft size={14} strokeWidth={3} className="hidden xs:block" />
+                  <ChevronLeft size={14} strokeWidth={3} />
                 </button>
                 <button 
                   onClick={handleNextMonth}
-                  className="p-1 xs:p-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-lg xs:rounded-xl text-cozy-text-dark transition hover:scale-102 active:scale-98 cursor-pointer flex items-center justify-center shadow-xs"
+                  className="p-1.5 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl text-cozy-text-dark transition hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center shadow-xs cozy-shadow-sm"
                   title="Next Month"
                 >
-                  <ChevronRight size={12} strokeWidth={3} className="xs:hidden" />
-                  <ChevronRight size={14} strokeWidth={3} className="hidden xs:block" />
+                  <ChevronRight size={14} strokeWidth={3} />
                 </button>
               </div>
             </div>
 
             {/* Current Month Banner */}
             <div className="flex items-center gap-1 mb-4 pl-1">
-              <span className="text-base xs:text-lg font-black text-[#4A3D30] tracking-tight">
+              <span className="text-lg xs:text-xl font-black text-[#4A3D30] tracking-tight">
                 {monthNames[selectedMonth]} {selectedYear}
               </span>
-              <ChevronRight size={14} strokeWidth={3} className="text-[#7A6956] opacity-60 mt-0.5" />
+              <ChevronRight size={16} strokeWidth={3} className="text-cozy-orange/80 mt-0.5" />
             </div>
 
             {/* Calendar Grid Headers */}
-            <div className="grid grid-cols-7 gap-1 xs:gap-1.5 sm:gap-2.5 text-center mb-2">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayHead) => (
-                <div key={dayHead} className="text-[10px] xs:text-xs font-black text-[#7A6956] uppercase tracking-wide">
-                  <span className="inline xs:hidden">{dayHead[0]}</span>
-                  <span className="hidden xs:inline">{dayHead}</span>
+            <div className="grid grid-cols-7 gap-1.5 xs:gap-2 text-center mb-3 bg-[#4A3D30]/5 border border-[#4A3D30]/10 rounded-2xl py-2 px-1">
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((dayHead) => (
+                <div key={dayHead} className="text-xs font-black text-[#6C5943] uppercase tracking-wider font-sans truncate">
+                  <span className="inline md:hidden">{dayHead.slice(0, 3)}</span>
+                  <span className="hidden md:inline">{dayHead}</span>
                 </div>
               ))}
             </div>
 
             {/* Calendar Grid Cells */}
-            <div className="grid grid-cols-7 gap-1 xs:gap-1.5 sm:gap-2">
+            <div className="grid grid-cols-7 gap-1.5 xs:gap-2.5">
               {getDaysForMonthGrid(selectedYear, selectedMonth).map((cell, idx) => {
                 const isToday = cell.isCurrentMonth && 
                                 cell.day === today.getDate() && 
@@ -635,28 +692,29 @@ export default function MoodAnalytics({
 
                 let cellStyle = '';
                 if (isSelected) {
-                  cellStyle = 'border-cozy-orange bg-[#FFFDF9] scale-102 ring-3 ring-cozy-orange/25 font-black shadow-md z-10';
+                  cellStyle = 'border-cozy-orange bg-[#FFFDFC] scale-102 ring-4 ring-cozy-orange/30 font-black shadow-md z-20';
                 } else if (isToday) {
-                  cellStyle = 'border-[#E08E6D] bg-[#FCF8F2] shadow-xs font-black z-10';
+                  cellStyle = 'border-[#E08E6D] bg-[#FCF8F2] shadow-sm font-black z-15 ring-2 ring-cozy-orange/15';
                 } else if (cell.isCurrentMonth) {
                   if (isActive) {
                     if (moodCategory === 'peaceful') {
-                      cellStyle = 'bg-[#FDF6E2] border-[#E6D4AF] text-[#5D4E3C] shadow-[0_0_12px_rgba(230,212,175,0.4)] hover:bg-[#FAF1D6] hover:scale-[1.01]';
+                      cellStyle = 'bg-[#FAF1D6] border-[#DCC393] text-[#5D4E3C] shadow-xs hover:bg-[#FAF1D6]/90 hover:scale-[1.02] active:scale-[0.98]';
                     } else if (moodCategory === 'excited') {
-                      cellStyle = 'bg-[#FFEFE2] border-[#F3C5A5] text-[#7C4015] shadow-[0_0_12px_rgba(243,197,165,0.5)] hover:bg-[#FFE3CE] hover:scale-[1.01] font-black';
+                      cellStyle = 'bg-[#FFE3CE] border-[#F1B18C] text-[#7C4015] shadow-xs hover:bg-[#FFE3CE]/90 hover:scale-[1.02] active:scale-[0.98] font-black';
                     } else if (moodCategory === 'tired') {
-                      cellStyle = 'bg-[#EFF2F5] border-[#C2CBD6] text-[#414E5E] shadow-[0_0_12px_rgba(194,203,214,0.4)] hover:bg-[#E3E8EE] hover:scale-[1.01]';
+                      cellStyle = 'bg-[#E3E8EE] border-[#B0BECF] text-[#414E5E] shadow-xs hover:bg-[#E3E8EE]/90 hover:scale-[1.02] active:scale-[0.98]';
                     } else if (moodCategory === 'stressed') {
-                      cellStyle = 'bg-[#FFF0F0] border-[#F3B7BA] text-[#823337] shadow-[0_0_12px_rgba(243,183,186,0.5)] hover:bg-[#FEDBDD] hover:scale-[1.01] font-black';
+                      cellStyle = 'bg-[#FEDBDD] border-[#EB9CA0] text-[#823337] shadow-xs hover:bg-[#FEDBDD]/90 hover:scale-[1.02] active:scale-[0.98] font-black';
                     } else {
-                      cellStyle = 'bg-white border-[#FAF6EB] text-[#7A6956]/40 hover:border-[#4A3D30]/15 hover:scale-[1.01]';
+                      cellStyle = 'bg-white border-[#EADFC9] text-[#7A6956]/70 hover:border-[#4A3D30]/30 hover:scale-[1.02] active:scale-[0.98]';
                     }
                   } else {
                     // Missed days are clean and quiet
-                    cellStyle = 'bg-white/80 border-[#FAF6EB] text-[#7A6956]/40 hover:bg-[#FCFBF7] hover:border-[#4A3D30]/15 hover:scale-[1.01]';
+                    cellStyle = 'bg-white/95 border-[#EADFC9] text-[#7A6956]/50 hover:bg-[#FCFBF7] hover:border-[#4A3D30]/30 hover:scale-[1.02] active:scale-[0.98]';
                   }
                 } else {
-                  cellStyle = 'bg-[#FAF6EB]/20 border-transparent text-[#7A6956]/15 pointer-events-none';
+                  // Out of bounds month days get an elegant subtle hatch pattern
+                  cellStyle = 'bg-[#FAF6EB]/20 border-transparent text-[#7A6956]/15 pointer-events-none opacity-40';
                 }
 
                 return (
@@ -674,24 +732,35 @@ export default function MoodAnalytics({
                         simulatedContent: details.simulatedContent
                       });
                     }}
-                    className={`min-h-[50px] xs:min-h-[60px] sm:min-h-[70px] flex flex-col justify-between p-1 xs:p-1.5 sm:p-2 rounded-xl xs:rounded-2xl border-2 transition-all duration-200 cursor-pointer relative ${cellStyle}`}
+                    style={!cell.isCurrentMonth ? {
+                      backgroundImage: 'repeating-linear-gradient(45deg, #FAF6EB 0px, #FAF6EB 3px, transparent 3px, transparent 6px)',
+                      backgroundColor: '#FCFBF9'
+                    } : undefined}
+                    className={`min-h-[58px] xs:min-h-[64px] sm:min-h-[76px] flex flex-col justify-between p-1.5 xs:p-2 sm:p-2.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer relative ${cellStyle}`}
                   >
+                    {/* Selected Indicator - Paper Clip Emoji */}
+                    {isSelected && (
+                      <div className="absolute -top-2 -right-1 text-xs select-none rotate-12 z-30" title="Selected Date">
+                        📎
+                      </div>
+                    )}
+
                     {/* Day Number and Bloom Flower */}
                     <div className="flex justify-between items-start w-full">
                       <div className="flex flex-col items-start gap-1">
                         {isToday ? (
-                          <div className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 rounded-full bg-[#E08E6D] text-white flex items-center justify-center font-black text-[10px] xs:text-xs sm:text-sm shadow-xs">
+                          <div className="w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 rounded-full bg-[#E08E6D] text-white flex items-center justify-center font-black text-[10px] xs:text-xs sm:text-sm shadow-xs border border-cozy-text-dark/20">
                             {cell.day}
                           </div>
                         ) : (
-                          <span className={`text-[10px] xs:text-xs font-black ${cell.isCurrentMonth ? 'text-[#4A3D30]' : 'text-[#7A6956]/20'}`}>
+                          <span className={`text-[10px] xs:text-xs sm:text-sm font-black ${cell.isCurrentMonth ? 'text-[#4A3D30]' : 'text-[#7A6956]/20'}`}>
                             {cell.day}
                           </span>
                         )}
 
                         {/* Miniature visual track of daily habits */}
                         {cell.isCurrentMonth && habits.length > 0 && (
-                          <div className="flex flex-wrap gap-0.5 max-w-[36px] xs:max-w-[48px] sm:max-w-[60px] mt-0.5" title="Daily Habits Consistency">
+                          <div className="flex flex-wrap gap-0.5 max-w-[36px] xs:max-w-[48px] sm:max-w-[60px] mt-1 p-0.5 bg-[#4A3D30]/5 rounded-full px-1.5 items-center justify-center" title="Daily Habits Consistency">
                             {habits.map((habit) => {
                               const yyyy = cell.year;
                               const mm = String(cell.month + 1).padStart(2, '0');
@@ -703,8 +772,8 @@ export default function MoodAnalytics({
                                   key={habit.id}
                                   className={`w-1.5 h-1.5 rounded-full transition-all duration-300 border ${
                                     isCompleted 
-                                      ? 'bg-emerald-500 border-emerald-600/30 shadow-xs shadow-emerald-500/30' 
-                                      : 'bg-[#4A3D30]/10 border-transparent opacity-30'
+                                      ? 'bg-emerald-500 border-emerald-600/30 shadow-xs' 
+                                      : 'bg-[#4A3D30]/10 border-transparent opacity-20'
                                   }`}
                                   title={`${habit.name}: ${isCompleted ? '✓ Completed' : '✗ Incomplete'}`}
                                 />
@@ -717,7 +786,7 @@ export default function MoodAnalytics({
                       {/* Blooming flower matching streak length */}
                       {cell.isCurrentMonth && streakLength > 0 && (
                         <span 
-                          className="text-xs sm:text-sm animate-bounce" 
+                          className="text-xs sm:text-sm animate-bounce inline-block transform origin-bottom hover:scale-110 transition-transform duration-200" 
                           style={{ animationDuration: '3s' }}
                           title={`Day ${streakLength} of your writing streak`}
                         >
@@ -730,14 +799,14 @@ export default function MoodAnalytics({
                     </div>
 
                     {/* Footer Row: Emotional Dew Drops & Checklist mini-progress */}
-                    <div className="space-y-1 mt-auto w-full">
+                    <div className="space-y-1 mt-auto w-full pt-1">
                       {/* Emotion Dew Drops */}
                       {cell.isCurrentMonth && hasDots && (
-                        <div className="flex justify-center gap-0.5 sm:gap-1 h-2 flex-wrap overflow-hidden">
+                        <div className="flex justify-center gap-0.5 sm:gap-1 h-3 flex-wrap overflow-hidden pt-0.5">
                           {dateDetail.dots.map((dotColor, dotIdx) => (
                             <span
                               key={dotIdx}
-                              className={`w-1 h-1 rounded-full ${
+                              className={`w-1.5 h-1.5 rounded-full border border-black/5 shadow-inner transform hover:scale-125 transition-transform duration-100 ${
                                 dotColor === 'green' ? 'bg-[#94A87C]' :
                                 dotColor === 'yellow' ? 'bg-[#E6C585]' :
                                 dotColor === 'purple' ? 'bg-[#C3B1E1]' :
@@ -753,12 +822,12 @@ export default function MoodAnalytics({
 
                       {/* Cozy Checklist progress bar */}
                       {cell.isCurrentMonth && cellProgress && cellProgress.total > 0 && (
-                        <div className="w-full pt-0.5">
-                          <div className="flex justify-between items-center text-[7px] sm:text-[8px] font-mono font-bold text-emerald-800/80 mb-0.5 leading-none">
+                        <div className="w-full pt-1">
+                          <div className="flex justify-between items-center text-[7px] sm:text-[8px] font-bold text-emerald-800/90 mb-0.5 leading-none font-mono">
                             <span>📋</span>
                             <span>{cellProgress.completed}/{cellProgress.total}</span>
                           </div>
-                          <div className="w-full h-1 bg-emerald-100 rounded-full overflow-hidden">
+                          <div className="w-full h-1 bg-emerald-100/80 rounded-full overflow-hidden border border-emerald-600/10">
                             <div 
                               className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                               style={{ width: `${(cellProgress.completed / cellProgress.total) * 100}%` }}
@@ -772,184 +841,149 @@ export default function MoodAnalytics({
               })}
             </div>
 
-            {/* Legend at the bottom */}
-            <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 sm:gap-x-5 mt-6 border-t border-[#4A3D30]/10 pt-4 text-[9px] xs:text-[10px] font-black text-[#7A6956] uppercase tracking-wide">
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#94A87C]" />
-                <span>Great</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#E6C585]" />
-                <span>Good</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#C3B1E1]" />
-                <span>Okay</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#E08E6D]" />
-                <span>Hard</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-[#99BECC]" />
-                <span>Notes Only</span>
-              </div>
-              <div className="flex items-center gap-1 border-l border-[#4A3D30]/15 pl-2.5">
-                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-emerald-500" />
-                <span>Habit Done</span>
-              </div>
-            </div>
 
-            {/* Heatmap Mood Color Indicators */}
-            <div className="mt-4 p-2.5 bg-white/45 border border-[#4A3D30]/10 rounded-2xl flex flex-col gap-2">
-              <div className="text-[9px] font-black uppercase tracking-wider text-[#7A6956] text-center">
-                🎨 Monthly Mood Heatmap & Well-Being Glow
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[9px] font-black text-[#4A3D30] uppercase tracking-wide">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm bg-[#FDF6E2] border border-[#E6D4AF] shadow-[0_0_8px_rgba(230,212,175,0.4)] shrink-0" />
-                  <span>Peaceful / Calm</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm bg-[#FFEFE2] border border-[#F3C5A5] shadow-[0_0_8px_rgba(243,197,165,0.5)] shrink-0" />
-                  <span>Excited / Happy</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm bg-[#EFF2F5] border border-[#C2CBD6] shadow-[0_0_8px_rgba(194,203,214,0.4)] shrink-0" />
-                  <span>Tired / Exhausted</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm bg-[#FFF0F0] border border-[#F3B7BA] shadow-[0_0_8px_rgba(243,183,186,0.5)] shrink-0" />
-                  <span>Stressed / Anxious</span>
-                </div>
-              </div>
-            </div>
         </div>
 
-        {/* Right Column: Monthly Summary Sidebar (col-span-4) */}
-        <div className="lg:col-span-4 w-full flex flex-col gap-5">
-          {/* Month Overview Card */}
-          <div className="bg-[#FAF6EB] border-2 xs:border-3 border-cozy-text-dark rounded-2xl xs:rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#4A3D30]/10 pb-3">
-              <Compass className="text-cozy-orange shrink-0" size={20} strokeWidth={2.5} />
-              <div>
-                <h3 className="text-sm font-black text-[#4A3D30] uppercase tracking-wider font-mono leading-none">
-                  {monthNames[selectedMonth]} Stats
-                </h3>
-                <p className="text-[10px] text-[#7A6956] font-bold mt-1">Visible Month Overview</p>
+        {/* Right Column: AI Life Insights Panel */}
+        <div className="lg:col-span-5 xl:col-span-4 w-full relative mt-6 bg-[#FCF8F2] border-3 border-cozy-text-dark rounded-3xl p-5 shadow-md cozy-shadow" style={{ backgroundImage: 'radial-gradient(#E2D1C3 1px, transparent 1px)', backgroundSize: '18px 18px' }}>
+          
+          {/* Spiral Binder Rings Aesthetic for Right Column */}
+          <div className="absolute -top-3.5 left-4 right-4 flex justify-between pointer-events-none z-10 select-none">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center">
+                <div className="w-2.5 h-6 bg-gradient-to-r from-gray-400 via-gray-100 to-gray-500 rounded-full border border-cozy-text-dark shadow-xs" />
+                <div className="w-1.5 h-1.5 bg-[#4A3E31] rounded-full -mt-0.5" />
               </div>
-            </div>
-
-            {/* Stat Counters Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
-              {/* Stat 1: Total Journals */}
-              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
-                <div className="w-9 h-9 bg-cozy-orange/10 rounded-xl flex items-center justify-center shrink-0">
-                  <MessageSquare className="text-cozy-orange" size={16} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Journals Spoken</div>
-                  <div className="text-base font-black text-cozy-text-dark leading-tight mt-1">{monthlyEntries.length} entries</div>
-                </div>
-              </div>
-
-              {/* Stat 2: Top Emotion */}
-              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
-                <div className="w-9 h-9 bg-cozy-yellow/20 rounded-xl flex items-center justify-center shrink-0">
-                  <Heart className="text-amber-700" size={16} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Top Emotion</div>
-                  <div className="text-sm font-black text-cozy-text-dark leading-tight mt-1 truncate max-w-[140px]">{mostFrequentEmotion}</div>
-                </div>
-              </div>
-
-              {/* Stat 3: Habit Rate */}
-              <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl flex items-center gap-3">
-                <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
-                  <Award className="text-emerald-600" size={16} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <div className="text-[9px] text-[#7A6956] font-black uppercase tracking-tight leading-none">Habit Streak Met</div>
-                  <div className="text-base font-black text-cozy-text-dark leading-tight mt-1">{habitCompletionRate}% done</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Takeaways Carousel Section */}
-            <div className="bg-white/60 border-2 border-[#4A3D30]/10 p-3 rounded-2xl space-y-2 relative">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-black text-[#7A6956] uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles size={11} className="text-cozy-orange" />
-                  <span>Monthly Takeaways</span>
-                </h4>
-                {monthlyTakeaways.length > 1 && (
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setActiveTakeawayIndex(prev => (prev === 0 ? monthlyTakeaways.length - 1 : prev - 1))}
-                      className="p-1 hover:bg-black/5 rounded-md text-cozy-text-dark transition cursor-pointer"
-                    >
-                      <ChevronLeft size={10} strokeWidth={3} />
-                    </button>
-                    <span className="text-[9px] font-bold text-cozy-text-muted font-mono">
-                      {activeTakeawayIndex + 1}/{monthlyTakeaways.length}
-                    </span>
-                    <button 
-                      onClick={() => setActiveTakeawayIndex(prev => (prev === monthlyTakeaways.length - 1 ? 0 : prev + 1))}
-                      className="p-1 hover:bg-black/5 rounded-md text-cozy-text-dark transition cursor-pointer"
-                    >
-                      <ChevronRight size={10} strokeWidth={3} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {monthlyTakeaways.length > 0 ? (
-                <div className="bg-white border border-[#4A3D30]/10 p-2.5 rounded-xl text-[10px] text-cozy-text-dark leading-relaxed font-semibold italic min-h-[48px] flex items-center">
-                  "{monthlyTakeaways[activeTakeawayIndex] || monthlyTakeaways[0]}"
-                </div>
-              ) : (
-                <div className="bg-white/40 border border-dashed border-[#4A3D30]/15 p-2.5 rounded-xl text-[10px] text-cozy-text-muted font-bold text-center">
-                  No core takeaways extracted this month yet. Keep reflecting!
-                </div>
-              )}
-            </div>
-
-            {/* Active Goals due this month */}
-            <div className="bg-white border-2 border-cozy-text-dark p-3 rounded-2xl space-y-2">
-              <h4 className="text-[10px] font-black text-[#7A6956] uppercase tracking-wider flex items-center gap-1">
-                <Target size={12} className="text-cozy-orange" />
-                <span>Month Milestones ({monthlyGoals.length})</span>
-              </h4>
-
-              {monthlyGoals.length > 0 ? (
-                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                  {monthlyGoals.map(goal => (
-                    <div key={goal.id} className="p-2 bg-[#FCF8F2] border border-[#4A3D30]/15 rounded-xl space-y-1">
-                      <div className="flex justify-between items-start gap-1">
-                        <span className="text-[10px] font-black text-[#4A3D30] line-clamp-1">{goal.title}</span>
-                        <span className="text-[8px] font-mono font-black uppercase px-1 py-0.5 rounded bg-cozy-orange/15 text-cozy-orange border border-cozy-orange/20 shrink-0">
-                          {goal.category}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-white border border-[#4A3D30]/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-cozy-orange rounded-full" style={{ width: `${goal.progress}%` }} />
-                        </div>
-                        <span className="text-[8px] font-black text-[#7A6956] shrink-0 font-mono">{goal.progress}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-[10px] text-cozy-text-muted font-bold py-1 text-center leading-normal">
-                  No goal milestone set for this month.<br/>
-                  <span className="text-[9px] text-cozy-orange font-black">💡 Click any calendar date to set a target!</span>
-                </div>
-              )}
-            </div>
+            ))}
           </div>
+
+          <div className="flex items-center justify-between border-b border-[#4A3D30]/10 pb-3 mb-4 mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🧠</span>
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-[#4A3D30] tracking-tight">AI Life Analyst</h3>
+                <p className="text-[9px] text-[#7A6956] font-bold">Real-time lifestyle & growth metrics</p>
+              </div>
+            </div>
+            {insights && (
+              <div className="flex flex-col items-end">
+                <span className="text-[8px] font-black uppercase text-[#E08E6D] tracking-widest font-mono">Growth Score</span>
+                <span className="text-sm font-black text-emerald-600 font-mono leading-none">{insights.growthScore || 85}%</span>
+              </div>
+            )}
+          </div>
+
+          {/* Timeframe selector tabs */}
+          <div className="grid grid-cols-4 gap-1 bg-[#4A3D30]/5 p-1 rounded-xl mb-4 border border-[#4A3D30]/10">
+            {(['day', 'week', 'month', 'year'] as const).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setInsightsTimeframe(tf)}
+                className={`text-[9px] font-black uppercase py-1.5 rounded-lg transition-all cursor-pointer ${
+                  insightsTimeframe === tf
+                    ? 'bg-[#E08E6D] text-white shadow-xs'
+                    : 'text-[#4A3D30]/70 hover:text-[#4A3D30] hover:bg-[#4A3D30]/5'
+                }`}
+              >
+                {tf === 'day' ? 'Day' : tf === 'week' ? 'Week' : tf === 'month' ? 'Month' : 'Year'}
+              </button>
+            ))}
+          </div>
+
+          {loadingInsights ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+              <div className="relative">
+                <Sparkles size={28} className="text-[#E08E6D] animate-spin" />
+                <span className="absolute -top-1 -right-1 text-xs animate-pulse">🐣</span>
+              </div>
+              <p className="text-xs text-[#7A6956] font-black">AI is analyzing your voice files, habits and milestone logs...</p>
+              <p className="text-[10px] text-[#7A6956]/60 italic font-medium">Drafting emotional climate charts</p>
+            </div>
+          ) : errorInsights ? (
+            <div className="bg-red-50 border-2 border-red-200 text-red-800 p-4 rounded-2xl text-center space-y-2">
+              <span className="text-2xl">⚠️</span>
+              <p className="text-xs font-black">{errorInsights}</p>
+              <button
+                onClick={() => fetchInsights(insightsTimeframe)}
+                className="px-3 py-1.5 bg-white border border-red-300 rounded-lg text-[10px] font-black hover:bg-red-50"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : insights ? (
+            <div className="space-y-4 text-xs">
+              {/* Climate Summary */}
+              <div className="bg-white/70 border-2 border-[#4A3D30]/15 rounded-2xl p-3.5 shadow-xs">
+                <h4 className="text-[10px] font-black uppercase text-[#E08E6D] tracking-wider mb-1.5 flex items-center gap-1">
+                  <span>🍃</span>
+                  <span>Cognitive Climate Summary</span>
+                </h4>
+                <p className="text-[#4A3D30] font-semibold leading-relaxed" dangerouslySetInnerHTML={{ __html: insights.summary }} />
+              </div>
+
+              {/* improvements tracking */}
+              <div className="bg-white/70 border-2 border-[#4A3D30]/15 rounded-2xl p-3.5 shadow-xs">
+                <h4 className="text-[10px] font-black uppercase text-emerald-600 tracking-wider mb-2 flex items-center gap-1">
+                  <span>📈</span>
+                  <span>Life Improvements & Resilience</span>
+                </h4>
+                <ul className="space-y-1.5">
+                  {(insights.improvements || []).map((imp: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-1.5 font-bold text-[#4A3D30]">
+                      <span className="text-emerald-500 shrink-0">✓</span>
+                      <span>{imp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* emotional trend */}
+              <div className="bg-white/70 border-2 border-[#4A3D30]/15 rounded-2xl p-3.5 shadow-xs">
+                <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider mb-1.5 flex items-center gap-1">
+                  <span>🌊</span>
+                  <span>Emotional Climate Trend</span>
+                </h4>
+                <p className="text-[#4A3D30] font-semibold leading-relaxed" dangerouslySetInnerHTML={{ __html: insights.emotionalTrend }} />
+              </div>
+
+              {/* suggestions */}
+              <div className="bg-amber-50/50 border-2 border-amber-500/20 rounded-2xl p-3.5 shadow-xs">
+                <h4 className="text-[10px] font-black uppercase text-amber-700 tracking-wider mb-2 flex items-center gap-1">
+                  <span>🌻</span>
+                  <span>AI Suggestions & Ideas for Growth</span>
+                </h4>
+                <ul className="space-y-2">
+                  {(insights.suggestions || []).map((sug: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-2 font-bold text-amber-900/90 bg-amber-500/5 p-1.5 rounded-lg border border-amber-500/10">
+                      <span className="text-amber-500 shrink-0 text-sm">💡</span>
+                      <span>{sug}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => fetchInsights(insightsTimeframe)}
+                className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-orange/95 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 tactile-btn-retro mt-2"
+              >
+                <Sparkles size={12} className="animate-pulse" />
+                <span>Recalculate Real-Time Insights</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-8 space-y-3">
+              <p className="text-xs text-[#7A6956] font-semibold">No insights calculated yet.</p>
+              <button
+                onClick={() => fetchInsights(insightsTimeframe)}
+                className="px-4 py-2 bg-[#E08E6D] text-white font-black text-xs rounded-xl"
+              >
+                Generate Insights
+              </button>
+            </div>
+          )}
+
         </div>
+
       </div>
 
       {/* DETAIL MODAL POPUP FOR SELECTED DATE */}
@@ -1061,7 +1095,7 @@ export default function MoodAnalytics({
                         setSelectedDateDetail(null);
                         onNavigateToEntry?.(selectedDateDetail.realEntry!.id);
                       }}
-                      className="flex-1 text-center py-2.5 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono"
+                      className="flex-1 text-center py-2.5 bg-cozy-orange text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono tactile-btn-retro"
                     >
                       📖 Open in Journal Editor
                     </button>
@@ -1099,7 +1133,7 @@ export default function MoodAnalytics({
                         } as any;
                         onSaveConvertedEntry?.(newPage);
                       }}
-                      className="flex-1 text-center py-2.5 bg-white hover:bg-[#FAF6EB] text-cozy-orange border-2 border-cozy-orange font-black text-xs rounded-xl shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                      className="flex-1 text-center py-2.5 bg-white text-cozy-orange border-2 border-cozy-orange font-black text-xs rounded-xl shadow-xs cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 tactile-btn-retro"
                     >
                       <Sparkles size={11} className="text-cozy-orange animate-pulse" />
                       <span>Save as Real Entry</span>
@@ -1159,14 +1193,14 @@ export default function MoodAnalytics({
                           setSelectedDateDetail(null);
                           onCreatePageForDate?.(targetDate);
                         }}
-                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 bg-cozy-orange text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 tactile-btn-retro"
                       >
                         <Plus size={14} strokeWidth={3} />
                         <span>Create Blank Reflection Page</span>
                       </button>
                       <button
                         onClick={() => setActiveModalTab('intention')}
-                        className="w-full py-2.5 bg-white hover:bg-[#FAF6EB] text-[#4A3D30] font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono"
+                        className="w-full py-2.5 bg-white text-[#4A3D30] font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono tactile-btn-retro"
                       >
                         ✍ Schedule Spoken Diary Intention
                       </button>
@@ -1217,7 +1251,7 @@ export default function MoodAnalytics({
                           setSelectedDateDetail(null);
                         }}
                         disabled={!scheduledIntentionText.trim()}
-                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 bg-cozy-orange disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 tactile-btn-retro"
                       >
                         <PlusCircle size={14} />
                         <span>Schedule Intention</span>
@@ -1295,7 +1329,7 @@ export default function MoodAnalytics({
                           setSelectedDateDetail(null);
                         }}
                         disabled={!newGoalTitle.trim()}
-                        className="w-full py-2.5 bg-cozy-orange hover:bg-cozy-accent disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs transition hover:scale-102 cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 bg-cozy-orange disabled:opacity-50 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-xs cursor-pointer uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 tactile-btn-retro"
                       >
                         <PlusCircle size={14} />
                         <span>Save Milestone Goal</span>
@@ -1308,6 +1342,8 @@ export default function MoodAnalytics({
           </div>
         </div>
       )}
+
+
 
     </div>
   );

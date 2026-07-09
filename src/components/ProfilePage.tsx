@@ -9,7 +9,7 @@ import {
   User, Shield, Key, Download, Trash2, Heart, Award, Sparkles, 
   Moon, Bell, CheckCircle2, Crown, Globe, Edit2, Check, X, Camera, 
   ChevronDown, Flame, BookOpen, AlertTriangle, HelpCircle, Lock, Info,
-  Share2, Save
+  Share2, Save, Leaf
 } from 'lucide-react';
 import { Badge, JournalEntry, Goal } from '../types';
 import confetti from 'canvas-confetti';
@@ -21,7 +21,12 @@ interface ProfilePageProps {
   userBio?: string;
   userAvatarBg?: string;
   isPremium: boolean;
-  onTogglePremium: () => void;
+  subscriptionPlan?: string;
+  subscriptionPeriodEnd?: string;
+  subscriptionCancelAtPeriodEnd?: number;
+  subscriptionTrialEnd?: string;
+  onTogglePremium: (plan: "monthly" | "yearly") => void;
+  onManageBilling?: () => void;
   onUpdateProfile?: (updates: { name?: string; email?: string; avatarEmoji?: string; bio?: string; avatarBg?: string }) => void;
   entries: JournalEntry[];
   badges: Badge[];
@@ -30,14 +35,14 @@ interface ProfilePageProps {
   onLogout: () => void;
 }
 
-const AVATAR_EMOJIS = ["👋", "🦊", "☕", "🥑", "🎨", "🧘", "🐱", "🌸", "🧸", "🌱", "✨", "🦉", "🦁", "🐨"];
+const AVATAR_EMOJIS = ["🐦", "🦉", "🐥", "🐧", "🦅", "🦆", "🦢", "🦜", "🦚", "🦩", "🐣", "🌸", "🌱", "🍂", "🐝"];
 
 const AVATAR_BGS = [
   { value: 'bg-cozy-orange', label: 'Terracotta' },
   { value: 'bg-cozy-accent', label: 'Sunset' },
   { value: 'bg-cozy-green', label: 'Sage' },
   { value: 'bg-cozy-yellow', label: 'Honey' },
-  { value: 'bg-emerald-600', label: 'Forest' },
+  { value: 'bg-[#5C6E58]', label: 'Pine Forest' },
   { value: 'bg-indigo-500', label: 'Twilight' },
   { value: 'bg-amber-700', label: 'Oak' },
 ];
@@ -45,11 +50,16 @@ const AVATAR_BGS = [
 export default function ProfilePage({
   userName,
   userEmail,
-  userAvatar = "👋",
-  userBio = "Reflecting on life, one voice note at a time.",
-  userAvatarBg = "bg-cozy-orange",
+  userAvatar = "🐦",
+  userBio = "Feathering my reflective nest, one day at a time.",
+  userAvatarBg = "bg-cozy-green",
   isPremium,
+  subscriptionPlan = "free",
+  subscriptionPeriodEnd,
+  subscriptionCancelAtPeriodEnd = 0,
+  subscriptionTrialEnd,
   onTogglePremium,
+  onManageBilling,
   onUpdateProfile,
   entries,
   badges,
@@ -283,7 +293,7 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
   };
 
   // Premium Toggle Celebrations
-  const handlePremiumAction = () => {
+  const handlePremiumAction = (plan: "monthly" | "yearly" = "monthly") => {
     if (!isPremium) {
       confetti({
         particleCount: 140,
@@ -291,10 +301,10 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
         origin: { y: 0.65 },
         colors: ['#E08E6D', '#FFD700', '#F7D6C8', '#4A3D30']
       });
-      onTogglePremium();
+      onTogglePremium(plan);
       triggerToast("Welcome to Daynest Premium! ✨ Cloud Sync & AI coaching activated.", "success");
     } else {
-      onTogglePremium();
+      onTogglePremium(plan);
       triggerToast("Premium subscription cancelled. Returning to Standard Tier.", "info");
     }
   };
@@ -369,6 +379,25 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
     }
   };
 
+  // Bird & Nest Helper functions to determine user species and nest quality
+  const getBirdClass = () => {
+    if (isPremium) return "Celestial Starling 🌟";
+    const count = entries.length;
+    if (count < 3) return "Fledgling Sparrow 🐣";
+    if (count < 8) return "Singing Bluejay 🐦";
+    if (count < 15) return "Cozy Robin 🪶";
+    if (count < 30) return "Wise Forest Owl 🦉";
+    return "Golden Phoenix 🔥";
+  };
+
+  const getNestState = () => {
+    const streak = currentStreakVal;
+    if (streak <= 2) return "Starting Nest (Twigs & Leaves) 🍂";
+    if (streak <= 6) return "Cozy Moss Nest (Soft & Insulated) 🪹";
+    if (streak <= 14) return "Safe Feathered Nest (Warm & Protective) 🪺";
+    return "Luxurious Sanctuary (Daynest Masterpiece) ✨🪺";
+  };
+
   // Dark Calming Theme Toggle with real persistence
   const handleDarkModeToggle = () => {
     const nextVal = !darkMode;
@@ -386,7 +415,7 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-3 xs:p-4 md:p-8 pb-24" id="profile_tab">
+    <div className="w-full max-w-4xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 md:p-8 pb-24" id="profile_tab">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -407,7 +436,11 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
 
       {/* Header Row */}
       <div className="mb-6 flex justify-between items-start">
-        <div>
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-cozy-orange/10 text-cozy-orange border border-cozy-orange/20">
+            <User size={11} strokeWidth={2.5} />
+            <span>User Identity</span>
+          </div>
           <h2 className="text-2xl font-black tracking-tight text-cozy-text-dark">Your Profile</h2>
           <p className="text-xs text-cozy-text-muted font-bold">Customize your reflective nest, badges & data backup</p>
         </div>
@@ -415,26 +448,42 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
         {/* Simple signout for header safety */}
         <button
           onClick={onLogout}
-          className="px-3 py-1.5 bg-[#FCF8F2] hover:bg-[#FAF0E3] text-cozy-text-dark hover:text-[#E08E6D] border-2 border-cozy-text-dark rounded-xl text-[10px] font-mono font-black uppercase tracking-wider transition hover:scale-103 cursor-pointer shadow-xs"
+          className="px-3 py-1.5 bg-[#FCF8F2] text-cozy-text-dark border-2 border-cozy-text-dark rounded-xl text-[10px] font-mono font-black uppercase tracking-wider cursor-pointer shadow-xs tactile-btn-retro"
         >
           Sign Out
         </button>
       </div>
 
       {/* Profile Bio Card with full Edit support */}
-      <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-5 mb-5 shadow-sm relative overflow-hidden transition-all duration-300">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#FAF6EB]/50 rounded-full blur-xl pointer-events-none" />
+      <div className="bg-cozy-card border-3 border-cozy-text-dark rounded-3xl p-6 mb-5 shadow-sm relative overflow-hidden transition-all duration-300 hover:border-amber-900 group/card">
+        {/* Decorative Nest branches and foliage patterns */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-emerald-800/5 to-amber-800/10 rounded-full blur-xl pointer-events-none" />
+        <div className="absolute bottom-0 left-12 w-24 h-24 bg-gradient-to-tr from-[#94A87C]/10 to-transparent rounded-full blur-lg pointer-events-none" />
         
+        {/* Tiny leaves decoration overlay */}
+        <div className="absolute top-3 right-4 flex gap-1 text-emerald-800/15 pointer-events-none select-none">
+          <Leaf size={14} className="rotate-45" />
+          <Leaf size={10} className="-rotate-12" />
+        </div>
+
         {!isEditing ? (
-          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 md:gap-5">
-            {/* Avatar Bubble with Edit Trigger */}
-            <div className="relative group shrink-0">
-              <div className={`w-18 h-18 rounded-2xl ${selectedBg} text-white border-2 xs:border-3 border-cozy-text-dark flex items-center justify-center text-3.5xl font-black select-none shadow-sm transition group-hover:scale-102`}>
-                {selectedEmoji}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5 md:gap-6 relative z-10">
+            {/* Avatar Bubble with Edit Trigger (Selector 1) */}
+            <div className="relative group shrink-0 flex flex-col items-center">
+              <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-amber-600/25 to-[#8F744B]/20 blur-sm group-hover:blur-md transition-all duration-300 pointer-events-none" />
+              <div className={`w-20 h-20 rounded-full ${selectedBg} text-white border-4 border-double border-amber-800/80 bg-[#EAD8C0] flex items-center justify-center text-4xl font-black select-none shadow-md transition-all duration-300 group-hover:scale-105 relative`}>
+                <span className="relative z-10 inline-block hover:animate-bounce cursor-help" title="Meet the Nestling!">
+                  {selectedEmoji}
+                </span>
+                <div className="absolute inset-0.5 rounded-full border border-dashed border-[#FAF6EB]/40 pointer-events-none" />
+              </div>
+              {/* Twig Nest Platform perched under the avatar */}
+              <div className="absolute -bottom-2.5 z-20 text-xl pointer-events-none select-none drop-shadow-sm filter transition-transform duration-300 group-hover:translate-y-0.5" title="Cozy Nest Bowl">
+                🪹
               </div>
               <button
                 onClick={() => setIsEditing(true)}
-                className="absolute -bottom-1.5 -right-1.5 bg-white p-1.5 rounded-xl text-cozy-text-dark shadow-sm border-2 border-cozy-text-dark hover:scale-110 transition cursor-pointer"
+                className="absolute bottom-2 -right-1 bg-white p-1.5 rounded-xl text-cozy-text-dark shadow-sm border-2 border-cozy-text-dark hover:scale-110 transition cursor-pointer z-30"
                 title="Edit Avatar & Bio"
               >
                 <Edit2 size={10} strokeWidth={3} />
@@ -442,43 +491,74 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
             </div>
 
             {/* Profile Info */}
-            <div className="flex-1 w-full space-y-2">
+            <div className="flex-1 w-full space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
                 <h3 className="text-base font-black text-cozy-text-dark">{userName}</h3>
-                <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
                   {isPremium ? (
-                    <span className="inline-flex items-center gap-1 text-[8px] font-black text-amber-900 bg-[#FCF9EC] border-2 border-amber-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                    <span className="inline-flex items-center gap-1 text-[8px] font-black text-amber-950 bg-[#FCF9EC] border-2 border-amber-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
                       <Crown size={9} fill="currentColor" className="text-amber-600" />
-                      <span>Premium</span>
+                      <span>Celestial Starling</span>
                     </span>
                   ) : (
                     <span className="inline-block text-[8px] font-black text-cozy-text-muted bg-[#FAF6EB] border border-cozy-text-dark/15 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Free Standard
+                      Free Flight Standard
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-black text-amber-900 bg-[#FFF3EE] border-2 border-[#F0D5CD]/40 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    🔥 {currentStreakVal} Day Streak
+                  <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-black text-emerald-900 bg-[#E2ECE0] border-2 border-[#5C6E58]/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    🍃 {currentStreakVal} Day Nest Warmth
                   </span>
                 </div>
               </div>
+
+              {/* Bird Species & Nest State Badges */}
+              <div className="flex flex-wrap justify-center sm:justify-start gap-2 pt-0.5">
+                <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider text-amber-950 bg-amber-50 border border-amber-800/20 px-2 py-1 rounded-lg shadow-3xs" title="Determined by total journal entries">
+                  🐤 Bird Class: <strong className="text-[#8F5B34]">{getBirdClass()}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-950 bg-emerald-50/50 border border-emerald-800/15 px-2 py-1 rounded-lg shadow-3xs" title="Determined by day streak status">
+                  🪺 Nest Build: <strong className="text-emerald-800">{getNestState()}</strong>
+                </span>
+              </div>
               
-              <p className="text-[10.5px] font-semibold text-[#7A6956] italic leading-relaxed max-w-lg">
+              <p className="text-[10.5px] font-semibold text-[#7A6956] italic leading-relaxed max-w-lg mt-1">
                 "{editedBio}"
               </p>
               
               <p className="text-[10px] text-cozy-text-muted font-bold font-mono">{userEmail}</p>
 
               {/* Real Metrics Row */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 pt-1.5 text-[10px] text-cozy-text-muted font-bold border-t border-dashed border-[#4A3D30]/10">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 pt-2 text-[10px] text-cozy-text-muted font-bold border-t border-dashed border-[#4A3D30]/10">
                 <div className="flex items-center gap-1">
                   <span className="text-sm">📖</span>
-                  <span><strong className="text-cozy-text-dark text-xs">{entries.length}</strong> journal entries</span>
+                  <span><strong className="text-cozy-text-dark text-xs">{entries.length}</strong> Spoken Twigs (logs)</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-sm">🏆</span>
-                  <span><strong className="text-cozy-text-dark text-xs">{badges.filter(b => b.unlocked).length}</strong> / {badges.length} unlocked badges</span>
+                  <span><strong className="text-cozy-text-dark text-xs">{badges.filter(b => b.unlocked).length}</strong> / {badges.length} Shiny Pebbles (badges)</span>
                 </div>
               </div>
+            </div>
+
+            {/* Visual Nest & Bird Perch Mini-Widget */}
+            <div className="hidden md:flex flex-col items-center justify-center bg-[#FCFAF5] border-2 border-dashed border-[#8F744B]/20 rounded-2xl p-3.5 text-center shrink-0 w-32 relative overflow-hidden group/nest select-none shadow-3xs hover:border-[#8F744B]/40 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-[#94A87C]/5 rounded-full blur-lg pointer-events-none" />
+              <span className="text-xs font-black uppercase text-[#8F744B] tracking-wider text-[8px] font-mono mb-1">Nest Warmth</span>
+              <div className="text-2xl mb-1 select-none">
+                {currentStreakVal > 6 ? "🪺" : "🪹"}
+              </div>
+              <div className="text-xs font-bold text-cozy-text-dark flex items-center gap-0.5 font-mono mb-1">
+                🔥 {currentStreakVal * 10 + 10}%
+              </div>
+              <div className="w-full bg-[#EAD8C0]/30 h-1.5 rounded-full overflow-hidden border border-[#4A3D30]/10">
+                <div 
+                  className="bg-cozy-orange h-full rounded-full transition-all duration-1000" 
+                  style={{ width: `${Math.min(((currentStreakVal * 10 + 10) / 100) * 100, 100)}%` }}
+                />
+              </div>
+              <span className="text-[7px] font-mono font-black uppercase text-cozy-text-muted mt-1 tracking-tight">
+                {currentStreakVal > 14 ? "Cosy Hollow!" : "Keep Spoken Twigs!"}
+              </span>
             </div>
 
             {/* Edit Profile button */}
@@ -487,7 +567,7 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
               className="absolute top-4 right-4 text-cozy-text-muted hover:text-cozy-orange hover:scale-105 transition hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-black uppercase cursor-pointer"
             >
               <Edit2 size={11} strokeWidth={2.5} />
-              <span>Edit Details</span>
+              <span>Mend Nest</span>
             </button>
           </div>
         ) : (
@@ -506,8 +586,10 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
               {/* Left Column: Avatar Customization */}
               <div className="md:col-span-4 flex flex-col items-center justify-center p-3.5 bg-white/50 rounded-2xl border-2 border-dashed border-[#4A3D30]/15 text-center">
-                <div className={`w-16 h-16 rounded-2xl ${selectedBg} text-white border-2 border-cozy-text-dark flex items-center justify-center text-3xl font-black mb-3 shadow-xs animate-bounce`} style={{ animationDuration: '4s' }}>
-                  {selectedEmoji}
+                <div className={`w-18 h-18 rounded-full ${selectedBg} text-white border-4 border-double border-amber-800 bg-[#EAD8C0] flex items-center justify-center text-3.5xl font-black mb-3 shadow-xs animate-bounce relative`} style={{ animationDuration: '4s' }}>
+                  <span className="relative z-10">{selectedEmoji}</span>
+                  <div className="absolute -inset-0.5 rounded-full border border-dashed border-[#FAF6EB]/40 pointer-events-none" />
+                  <span className="absolute -bottom-2 text-md z-20 pointer-events-none select-none">🪹</span>
                 </div>
                 <span className="text-[9px] font-bold text-cozy-text-muted uppercase tracking-wider mb-2">Pick an Icon & Backing</span>
                 
@@ -569,13 +651,13 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
                 <div className="flex gap-2 justify-end pt-2">
                   <button
                     onClick={() => setIsEditing(false)}
-                    className="px-3.5 py-1.5 text-[10px] font-mono font-black uppercase tracking-wider bg-white hover:bg-cozy-bg text-cozy-text-dark border-2 border-cozy-text-dark rounded-xl transition cursor-pointer"
+                    className="px-3.5 py-1.5 text-[10px] font-mono font-black uppercase tracking-wider bg-white text-cozy-text-dark border-2 border-cozy-text-dark rounded-xl cursor-pointer tactile-btn-retro"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveProfile}
-                    className="px-4 py-1.5 text-[10px] font-mono font-black uppercase tracking-wider bg-[#94A87C] text-white hover:bg-[#83976B] border-2 border-cozy-text-dark rounded-xl flex items-center gap-1 transition cursor-pointer shadow-xs"
+                    className="px-4 py-1.5 text-[10px] font-mono font-black uppercase tracking-wider bg-[#94A87C] text-white border-2 border-cozy-text-dark rounded-xl flex items-center gap-1 cursor-pointer shadow-xs tactile-btn-retro"
                   >
                     <Save size={10} strokeWidth={2.5} />
                     <span>Save Changes</span>
@@ -589,14 +671,21 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
 
       {/* Premium Subscription Card */}
       <div className="border-3 border-cozy-text-dark rounded-3xl mb-5 shadow-sm overflow-hidden relative">
-        {/* Styled cozy background block for premium status */}
-        <div className={`p-5 transition-all ${isPremium ? 'bg-gradient-to-r from-[#FCF9EC] to-[#FDFBF2] text-amber-950' : 'bg-cozy-card text-cozy-text-dark'}`}>
+        <div className={`p-5 transition-all ${isPremium ? 'bg-gradient-to-b from-[#FCF9EC] to-[#FDFBF2] text-amber-950' : 'bg-cozy-card text-cozy-text-dark'}`}>
           <div className="flex justify-between items-start mb-2.5">
             <div className="flex items-center gap-2 text-xs font-black text-cozy-orange uppercase tracking-widest font-mono">
               <Crown size={15} fill="currentColor" className={isPremium ? 'text-amber-600' : 'text-cozy-orange'} />
-              <span>Premium Membership</span>
+              <span>Premium Nest Membership</span>
             </div>
-            <span className="text-[10px] font-black text-[#7A6956] font-mono uppercase bg-white/80 px-2 py-0.5 rounded-md border border-[#4A3D30]/10">₹199 / month</span>
+            {isPremium ? (
+              <span className="text-[10px] font-black text-amber-800 font-mono uppercase bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-900/10">
+                Active {subscriptionPlan === "yearly" ? "Annual" : "Monthly"}
+              </span>
+            ) : (
+              <span className="text-[10px] font-black text-cozy-orange font-mono uppercase bg-amber-50 px-2 py-0.5 rounded-md border border-cozy-orange/20">
+                7-Day Free Trial Included
+              </span>
+            )}
           </div>
 
           <p className="text-[11px] leading-relaxed mb-4 font-semibold text-cozy-text-dark/90">
@@ -608,44 +697,129 @@ ${entry.takeaways.map(t => `- [ ] ${t}`).join('\n') || "*No items extracted.*"}
           {/* Premium Features Checklist */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 mb-4 text-[10px] font-bold text-cozy-text-dark/80">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={12} className={isPremium ? 'text-emerald-600' : 'text-cozy-text-muted/40'} />
+              <CheckCircle2 size={12} className="text-emerald-600" />
               <span>Unlimited Voice & Text Journaling</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={12} className={isPremium ? 'text-emerald-600' : 'text-cozy-text-muted/40'} />
+              <CheckCircle2 size={12} className="text-emerald-600" />
               <span>Cozy AI Life Coach Chats & Guidance</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={12} className={isPremium ? 'text-emerald-600' : 'text-cozy-text-muted/40'} />
+              <CheckCircle2 size={12} className="text-emerald-600" />
               <span>Interactive Calendar Garden Forecasts</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={12} className={isPremium ? 'text-emerald-600' : 'text-cozy-text-muted/40'} />
-              <span>Secure Encrypted Local Backups</span>
+              <CheckCircle2 size={12} className="text-emerald-600" />
+              <span>Secure Encrypted Cloud Backups</span>
             </div>
           </div>
 
-          <button
-            onClick={handlePremiumAction}
-            className={`w-full py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-2 border-2 border-cozy-text-dark cursor-pointer ${
-              isPremium
-                ? 'bg-white hover:bg-[#FAF6EB] text-cozy-text-dark shadow-xs'
-                : 'bg-[#E08E6D] hover:bg-[#D57E5C] text-white shadow-sm hover:scale-[1.01] active:scale-[0.99]'
-            }`}
-            id="premium_toggle"
-          >
-            {isPremium ? (
-              <>
-                <Info size={12} />
-                <span>Cancel Subscription</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} className="animate-spin" style={{ animationDuration: '8s' }} />
-                <span>Activate Premium Nest – ₹199/Month</span>
-              </>
-            )}
-          </button>
+          {isPremium ? (
+            /* ACTIVE SUBSCRIBER DETAILS */
+            <div className="border-2 border-dashed border-[#7A6956]/20 bg-[#FAF7EB]/80 rounded-2xl p-4 mb-4 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="font-bold text-[#7A6956] font-mono uppercase tracking-wider">Current Plan:</span>
+                <span className="font-extrabold capitalize text-amber-900">{subscriptionPlan} Membership</span>
+              </div>
+              
+              {subscriptionTrialEnd && new Date(subscriptionTrialEnd).getTime() > Date.now() && (
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="font-bold text-[#7A6956] font-mono uppercase tracking-wider">Trial Period Ends:</span>
+                  <span className="font-extrabold text-amber-900">
+                    {new Date(subscriptionTrialEnd).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              )}
+
+              {subscriptionPeriodEnd && (
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="font-bold text-[#7A6956] font-mono uppercase tracking-wider">
+                    {subscriptionCancelAtPeriodEnd ? "Subscription Expires On:" : "Next Renewal Date:"}
+                  </span>
+                  <span className="font-extrabold text-amber-900">
+                    {new Date(subscriptionPeriodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="font-bold text-[#7A6956] font-mono uppercase tracking-wider">Auto-Renewal:</span>
+                <span className={`font-extrabold px-1.5 py-0.5 rounded-md text-[10px] ${subscriptionCancelAtPeriodEnd ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-800"}`}>
+                  {subscriptionCancelAtPeriodEnd ? "Disabled (Cancelling)" : "Enabled"}
+                </span>
+              </div>
+
+              {onManageBilling && (
+                <div className="pt-2">
+                  <button
+                    onClick={onManageBilling}
+                    className="w-full py-2 bg-white text-cozy-text-dark border-2 border-[#4A3D30] rounded-xl text-[11px] font-mono font-black uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-amber-50 cursor-pointer tactile-btn-retro shadow-xs"
+                  >
+                    <Info size={12} />
+                    <span>Manage Billing & Customer Portal</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* PLAN SELECTION SCREEN */
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Monthly Subscription Option */}
+                <button
+                  onClick={() => {
+                    confetti({
+                      particleCount: 80,
+                      spread: 60,
+                      colors: ['#E08E6D', '#94A87C']
+                    });
+                    onTogglePremium("monthly");
+                  }}
+                  className="p-3.5 bg-white border-2 border-cozy-text-dark hover:border-cozy-orange rounded-2xl text-left transition relative cursor-pointer group tactile-btn-retro flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[9px] font-mono font-black uppercase tracking-widest text-[#7A6956] block mb-0.5">Flexible Plan</span>
+                    <h4 className="text-xs font-extrabold text-cozy-text-dark group-hover:text-cozy-orange transition">Monthly Nest</h4>
+                    <p className="text-[10px] text-cozy-text-muted mt-1 leading-normal font-semibold">Includes 7-day trial, then billed monthly. Cancel anytime.</p>
+                  </div>
+                  <div className="mt-4 pt-2 border-t border-[#4A3D30]/10 flex justify-between items-baseline">
+                    <span className="text-xs font-mono font-extrabold text-cozy-text-dark">$9.99<span className="text-[9px] text-cozy-text-muted">/mo</span></span>
+                    <span className="text-[9px] font-mono bg-[#FAF7EB] px-1.5 py-0.5 border border-[#4A3D30]/10 rounded-md font-bold text-cozy-orange group-hover:bg-amber-50">7 Days Free</span>
+                  </div>
+                </button>
+
+                {/* Yearly Subscription Option */}
+                <button
+                  onClick={() => {
+                    confetti({
+                      particleCount: 120,
+                      spread: 80,
+                      colors: ['#FFD700', '#94A87C', '#E08E6D']
+                    });
+                    onTogglePremium("yearly");
+                  }}
+                  className="p-3.5 bg-gradient-to-br from-[#FFFDF5] to-[#FCFAF0] border-2 border-cozy-orange rounded-2xl text-left transition relative cursor-pointer group tactile-btn-retro flex flex-col justify-between shadow-xs"
+                >
+                  <div className="absolute -top-2 right-3 bg-cozy-orange text-white text-[8px] font-mono font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-cozy-text-dark">
+                    Best Value - Save 33%
+                  </div>
+                  <div className="mt-1">
+                    <span className="text-[9px] font-mono font-black uppercase tracking-widest text-cozy-orange block mb-0.5">Annual Nest</span>
+                    <h4 className="text-xs font-extrabold text-cozy-text-dark group-hover:text-cozy-orange transition">Yearly Nest</h4>
+                    <p className="text-[10px] text-cozy-text-muted mt-1 leading-normal font-semibold">Includes 7-day trial, then billed annually. Best savings!</p>
+                  </div>
+                  <div className="mt-4 pt-2 border-t border-cozy-orange/20 flex justify-between items-baseline">
+                    <span className="text-xs font-mono font-extrabold text-cozy-text-dark">$79.99<span className="text-[9px] text-cozy-text-muted">/yr</span></span>
+                    <span className="text-[9px] font-mono bg-cozy-orange/10 px-1.5 py-0.5 rounded-md font-extrabold text-cozy-orange">7 Days Free</span>
+                  </div>
+                </button>
+              </div>
+
+              <div className="text-[10px] text-center text-cozy-text-muted font-bold font-mono pt-1">
+                🔒 Secured with Stripe Checkout. Real-time sync. Cancel in 1 click.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

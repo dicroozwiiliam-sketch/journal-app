@@ -11,7 +11,8 @@ import {
   Trash2, Copy, Lock, Unlock, ArrowUp, ArrowDown, Scissors, Check, X,
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight,
   ChevronDown, Type as TypeIcon, Eye, Edit, List, Quote, HelpCircle,
-  FileText, FileDown, Hexagon, Cloud, MessageSquare, Moon, Diamond, Flower, Sun
+  FileText, FileDown, Hexagon, Cloud, MessageSquare, Moon, Diamond, Flower, Sun,
+  Upload
 } from 'lucide-react';
 
 export interface FloatingObject {
@@ -28,6 +29,7 @@ export interface FloatingObject {
   content: string; // text, base64 drawing data, emoji, image URL, etc.
   color?: string; // main fill/text color
   borderColor?: string;
+  groupId?: string;
   meta?: {
     fontFamily?: 'sans' | 'serif' | 'mono' | 'handwriting';
     fontSize?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
@@ -103,6 +105,10 @@ export default function FloatingCanvas({
   const [localActiveTab, setLocalActiveTab] = useState<'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco'>('text');
   const [localSelectedObjectId, setLocalSelectedObjectId] = useState<string | null>(null);
 
+  // Grouping and Multi-selection state
+  const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+
   const selectedObjectId = propSelectedObjectId !== undefined ? propSelectedObjectId : localSelectedObjectId;
   const setSelectedObjectId = (id: string | null) => {
     if (propOnSelectObject) propOnSelectObject(id);
@@ -136,6 +142,7 @@ export default function FloatingCanvas({
     centerX: number;
     centerY: number;
     startAngle: number;
+    startGroupPositions?: { [id: string]: { x: number; y: number } };
   }>({
     type: null,
     objId: null,
@@ -290,6 +297,34 @@ export default function FloatingCanvas({
     showToast(updated.find(o => o.id === id)?.isLocked ? "Position locked 🔒" : "Position unlocked 🔓");
   };
 
+  // Create Group from multi-selected items
+  const handleCreateGroup = () => {
+    if (multiSelectIds.length < 2) return;
+    const newGroupId = `group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const updated = floatingObjects.map(o => {
+      if (multiSelectIds.includes(o.id)) {
+        return { ...o, groupId: newGroupId };
+      }
+      return o;
+    });
+    saveState(updated, "Group elements");
+    setMultiSelectIds([]);
+    setIsMultiSelectMode(false);
+    showToast("Selected items grouped together! 🔗");
+  };
+
+  // Ungroup items
+  const handleUngroup = (groupId: string) => {
+    const updated = floatingObjects.map(o => {
+      if (o.groupId === groupId) {
+        return { ...o, groupId: undefined };
+      }
+      return o;
+    });
+    saveState(updated, "Ungroup elements");
+    showToast("Elements ungrouped! 🔓");
+  };
+
   // Global mouse move and mouse up handlers for drag / resize / rotate interactions
   useEffect(() => {
     const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
@@ -310,15 +345,28 @@ export default function FloatingCanvas({
         const deltaXPercent = (deltaX / rect.width) * 100;
         const deltaYPercent = (deltaY / rect.height) * 100;
 
-        let newX = interaction.startLeft + deltaXPercent;
-        let newY = interaction.startTop + deltaYPercent;
-
-        // Soft boundaries (-20% to 110%) to allow beautiful bleeding off the edges
-        newX = Math.max(-20, Math.min(110, newX));
-        newY = Math.max(-5, Math.min(110, newY));
-
         const updated = floatingObjects.map(o => {
-          if (o.id === interaction.objId) {
+          if (interaction.startGroupPositions && o.id in interaction.startGroupPositions) {
+            const startPos = interaction.startGroupPositions[o.id];
+            let newX = startPos.x + deltaXPercent;
+            let newY = startPos.y + deltaYPercent;
+
+            // Soft boundaries (-20% to 110%) to allow beautiful bleeding off the edges
+            newX = Math.max(-20, Math.min(110, newX));
+            newY = Math.max(-5, Math.min(110, newY));
+
+            return {
+              ...o,
+              x: parseFloat(newX.toFixed(2)),
+              y: parseFloat(newY.toFixed(2))
+            };
+          } else if (o.id === interaction.objId) {
+            let newX = interaction.startLeft + deltaXPercent;
+            let newY = interaction.startTop + deltaYPercent;
+
+            newX = Math.max(-20, Math.min(110, newX));
+            newY = Math.max(-5, Math.min(110, newY));
+
             return { ...o, x: parseFloat(newX.toFixed(2)), y: parseFloat(newY.toFixed(2)) };
           }
           return o;
@@ -395,13 +443,49 @@ export default function FloatingCanvas({
 
   // Initiate interactions
   const startDrag = (e: React.MouseEvent | React.TouchEvent, obj: FloatingObject) => {
-    if (obj.isLocked) return;
     e.stopPropagation();
+
+    // Check if Shift is pressed (for desktop multi-selection support) or if we're in multi-select mode
+    const isShiftPressed = 'nativeEvent' in e && (e.nativeEvent as MouseEvent).shiftKey;
+
+    if (isMultiSelectMode || isShiftPressed) {
+      if (isShiftPressed && !isMultiSelectMode) {
+        setIsMultiSelectMode(true);
+      }
+      const isAlreadySelected = multiSelectIds.includes(obj.id);
+      const nextIds = isAlreadySelected
+        ? multiSelectIds.filter(id => id !== obj.id)
+        : [...multiSelectIds, obj.id];
+      setMultiSelectIds(nextIds);
+      setSelectedObjectId(null); // Clear single selection
+      return;
+    }
+
+    setSelectedObjectId(obj.id);
+
+    if (obj.isLocked) return;
 
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    setSelectedObjectId(obj.id);
+    // Gather start positions for all items moving as a unit
+    const startPositions: { [id: string]: { x: number; y: number } } = {};
+    if (obj.groupId) {
+      floatingObjects.forEach(o => {
+        if (o.groupId === obj.groupId && !o.isLocked) {
+          startPositions[o.id] = { x: o.x, y: o.y };
+        }
+      });
+    } else if (multiSelectIds.includes(obj.id)) {
+      floatingObjects.forEach(o => {
+        if (multiSelectIds.includes(o.id) && !o.isLocked) {
+          startPositions[o.id] = { x: o.x, y: o.y };
+        }
+      });
+    } else {
+      startPositions[obj.id] = { x: obj.x, y: obj.y };
+    }
+
     setInteraction({
       type: 'move',
       objId: obj.id,
@@ -413,7 +497,8 @@ export default function FloatingCanvas({
       startHeight: obj.height,
       centerX: 0,
       centerY: 0,
-      startAngle: 0
+      startAngle: 0,
+      startGroupPositions: startPositions
     });
   };
 
@@ -517,6 +602,55 @@ export default function FloatingCanvas({
 
   return (
     <>
+      {/* Top Center Grouping Banner */}
+      <AnimatePresence>
+        {isMultiSelectMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: '-50%' }}
+            animate={{ opacity: 1, y: 16, x: '-50%' }}
+            exit={{ opacity: 0, y: -50, x: '-50%' }}
+            className="absolute left-1/2 top-4 -translate-x-1/2 bg-[#FAF6EB] border-3 border-cozy-text-dark rounded-2xl shadow-2xl px-4 py-2.5 flex items-center gap-3 z-50 pointer-events-auto select-none max-w-sm w-full max-sm:w-[90%]"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black text-cozy-orange uppercase tracking-wider">Group Elements Mode</p>
+              <p className="text-xs font-bold text-cozy-text-dark">
+                {multiSelectIds.length === 0 
+                  ? "Tap items on the canvas to select..." 
+                  : `${multiSelectIds.length} element${multiSelectIds.length === 1 ? '' : 's'} selected`
+                }
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={handleCreateGroup}
+                disabled={multiSelectIds.length < 2}
+                className={`px-3 py-1.5 rounded-xl font-black text-xs border-2 border-cozy-text-dark flex items-center gap-1 cursor-pointer transition ${
+                  multiSelectIds.length >= 2 
+                    ? 'bg-cozy-orange text-white hover:scale-105 active:scale-95 shadow-sm' 
+                    : 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
+                }`}
+                title="Create Group"
+              >
+                <span>🔗 Group</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setIsMultiSelectMode(false);
+                  setMultiSelectIds([]);
+                  showToast("Exited grouping mode ❌");
+                }}
+                className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-600 rounded-lg transition border border-transparent hover:border-rose-200 cursor-pointer"
+                title="Cancel"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. FLOATING OBJECTS CANVAS LAYER (Rendered inline inside relative paper wrapper) */}
       <div 
         ref={canvasRef}
@@ -525,6 +659,8 @@ export default function FloatingCanvas({
       >
         {floatingObjects.map((obj) => {
           const isSelected = selectedObjectId === obj.id;
+          const selectedObj = floatingObjects.find(o => o.id === selectedObjectId);
+          const isGroupCohort = selectedObj?.groupId && obj.groupId === selectedObj.groupId && obj.id !== selectedObjectId;
           
           return (
             <div
@@ -549,6 +685,24 @@ export default function FloatingCanvas({
               {/* Active Selection Border */}
               {isSelected && (
                 <div className="absolute -inset-2 border-2 border-dashed border-cozy-orange rounded-xl pointer-events-none animate-pulse" />
+              )}
+
+              {/* Grouping Selection Border */}
+              {isMultiSelectMode && multiSelectIds.includes(obj.id) && (
+                <div className="absolute -inset-2 border-3 border-cozy-orange bg-cozy-orange/10 rounded-xl pointer-events-none flex items-center justify-center">
+                  <span className="bg-cozy-text-dark border border-white text-white font-black text-[9px] px-1.5 py-0.5 rounded-full absolute -top-2.5 -right-2 shadow-md">
+                    Selected
+                  </span>
+                </div>
+              )}
+
+              {/* Subtle Linked Highlight for Group Cohorts */}
+              {isGroupCohort && !isMultiSelectMode && (
+                <div className="absolute -inset-1.5 border-2 border-dotted border-cozy-orange/40 rounded-xl pointer-events-none">
+                  <span className="absolute -top-2 -left-2 bg-cozy-orange/90 text-white text-[8px] font-black w-4 h-4 rounded-full shadow-xs flex items-center justify-center animate-pulse">
+                    🔗
+                  </span>
+                </div>
               )}
 
               {/* Rotator Handle */}
@@ -594,6 +748,33 @@ export default function FloatingCanvas({
                   >
                     <Copy size={12} />
                   </button>
+
+                  {/* Group / Ungroup action inside overlay */}
+                  {obj.groupId ? (
+                    <button
+                      onClick={() => handleUngroup(obj.groupId!)}
+                      className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg transition cursor-pointer flex items-center gap-0.5 border border-transparent hover:border-rose-100"
+                      title="Ungroup elements"
+                    >
+                      <Scissors size={12} />
+                      <span className="text-[8px] font-black uppercase">Ungroup</span>
+                    </button>
+                  ) : (
+                    !isMultiSelectMode && (
+                      <button
+                        onClick={() => {
+                          setIsMultiSelectMode(true);
+                          setMultiSelectIds([obj.id]);
+                          showToast("Grouping Mode Active! Tap other items to select. 🔗");
+                        }}
+                        className="p-1 hover:bg-cozy-orange/15 rounded-lg text-cozy-text-dark hover:text-cozy-orange transition cursor-pointer flex items-center gap-0.5 border border-transparent hover:border-cozy-orange/20"
+                        title="Group with other elements"
+                      >
+                        <span className="text-[10px]">🔗</span>
+                        <span className="text-[8px] font-black uppercase">Group</span>
+                      </button>
+                    )
+                  )}
                   
                   {/* Opacity slider */}
                   <div className="flex items-center gap-1 border-l border-cozy-text-dark/15 pl-1.5 ml-0.5">
@@ -623,7 +804,7 @@ export default function FloatingCanvas({
               )}
 
               {/* FLOATING OBJECT CONTENT RENDERING */}
-              <div className="w-full h-full select-none">
+              <div className={`w-full h-full select-none ${obj.isLocked ? 'pointer-events-none' : ''}`}>
                 {/* 1. TEXT BOX FLOATING OBJECT */}
                 {obj.type === 'text' && (
                   <div 
@@ -1048,9 +1229,39 @@ export default function FloatingCanvas({
 
                 {/* IMAGES TAB */}
                 {activeTab === 'image' && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
+                    {/* Select from local photo gallery / upload */}
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-bold text-cozy-text-muted">IMAGES FROM YOUR GALLERY</p>
+                      <p className="text-[10px] font-bold text-cozy-text-muted">CHOOSE FROM YOUR DEVICE</p>
+                      <label className="group border-2 border-dashed border-cozy-text-dark/20 hover:border-cozy-orange bg-cozy-bg/20 hover:bg-cozy-orange/5 rounded-xl p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all duration-200 text-center">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const dataUrl = event.target?.result as string;
+                                if (dataUrl) {
+                                  spawnObject('image', { content: dataUrl, width: 180, height: 180 });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <div className="p-2 bg-white rounded-full border border-cozy-text-dark/15 shadow-sm group-hover:scale-110 transition duration-200">
+                          <Upload size={16} className="text-cozy-text-muted group-hover:text-cozy-orange" />
+                        </div>
+                        <span className="text-xs font-black text-cozy-text-dark tracking-tight">Select Photo from Device</span>
+                        <span className="text-[8px] font-semibold text-cozy-text-muted">Tap to choose from photo gallery</span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1 border-t border-cozy-text-dark/10">
+                      <p className="text-[10px] font-bold text-cozy-text-muted">PAGE GALLERY PHOTOS</p>
                       {galleryImages && galleryImages.length > 0 ? (
                         <div className="grid grid-cols-3 gap-2">
                           {galleryImages.map((imgUrl, i) => (
@@ -1157,16 +1368,16 @@ export default function FloatingCanvas({
                       <span className="text-[9px] font-black text-cozy-orange tracking-widest uppercase block">Washi Tape Ribbons</span>
                       <div className="grid grid-cols-2 gap-1.5">
                         {[
-                          { pattern: 'solid', color: '#C84B31', label: 'Terracotta Red' },
-                          { pattern: 'stripes', color: '#4D623F', label: 'Deep Sage Olive' },
-                          { pattern: 'dots', color: '#D6952B', label: 'Harvest Gold' },
-                          { pattern: 'grid', color: '#1F3A52', label: 'Indigo Grid' },
-                          { pattern: 'plaid', color: '#2C4B35', label: 'Forest Plaid' },
-                          { pattern: 'vintage', color: '#8E635F', label: 'Dusty Mauve' },
-                          { pattern: 'checker', color: '#6E5138', label: 'Retro Checker' },
-                          { pattern: 'celestial', color: '#19153B', label: 'Starry Midnight' },
-                          { pattern: 'lace', color: '#7D1A2C', label: 'Burgundy Lace' },
-                          { pattern: 'solid', color: '#155E63', label: 'Royal Teal' }
+                          { pattern: 'solid', color: '#E59C84', label: 'Terracotta Peach' },
+                          { pattern: 'stripes', color: '#8B9E78', label: 'Soft Sage Olive' },
+                          { pattern: 'dots', color: '#EBC16D', label: 'Warm Butter Gold' },
+                          { pattern: 'grid', color: '#62809C', label: 'Cozy Denim Grid' },
+                          { pattern: 'plaid', color: '#7FA88B', label: 'Mint Sage Plaid' },
+                          { pattern: 'vintage', color: '#B58E8A', label: 'Soft Rose Mauve' },
+                          { pattern: 'checker', color: '#9C7F67', label: 'Warm Caramel Checker' },
+                          { pattern: 'celestial', color: '#5B568F', label: 'Cosmic Periwinkle' },
+                          { pattern: 'lace', color: '#9C5B67', label: 'Dusty Burgundy Lace' },
+                          { pattern: 'solid', color: '#4B9EA6', label: 'Dusty Seafoam Teal' }
                         ].map(t => {
                           const getPreviewStyle = (pat: string, col: string) => {
                             if (pat === 'stripes') {
@@ -1494,6 +1705,33 @@ export default function FloatingCanvas({
               </div>
             )}
           </AnimatePresence>
+
+          {/* Grouping Mode Toggle Button */}
+          <button
+            onClick={() => {
+              if (isMultiSelectMode) {
+                setIsMultiSelectMode(false);
+                setMultiSelectIds([]);
+                showToast("Exited grouping mode ❌");
+              } else {
+                setIsMultiSelectMode(true);
+                setMultiSelectIds([]);
+                setSelectedObjectId(null);
+                showToast("Grouping Mode Active! Tap elements to select. 🔗");
+              }
+            }}
+            style={{
+              backgroundColor: isMultiSelectMode ? 'var(--color-cozy-orange, #EF9A7A)' : '#FFFFFF',
+              borderColor: 'var(--color-cozy-text-dark, #4A3E31)'
+            }}
+            className={`w-12 h-12 rounded-full border-3 flex flex-col items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all z-50 cursor-pointer pointer-events-auto group-toggle-btn ${
+              isMultiSelectMode ? 'text-white' : 'text-cozy-text-dark hover:bg-[#FDF8F1]'
+            }`}
+            title="Group Elements"
+          >
+            <span className="text-sm">🔗</span>
+            <span className="text-[6px] font-black tracking-tighter -mt-0.5 uppercase">Group</span>
+          </button>
 
           {/* Main Floating Circle Button (fixed to right center / bottom right) */}
           <button

@@ -1767,12 +1767,18 @@ export default function NotionBlockEditor({
                 {/* 10. CHECKLIST (TODO) */}
                 {block.type === 'todo' && (
                   <div className="relative w-full flex items-start gap-2.5">
-                    <input
-                      type="checkbox"
-                      checked={block.completed || false}
-                      onChange={() => toggleTodo(block.id)}
-                      className="w-4 h-4 rounded border-[#E2D1C3] text-[#EF9A7A] focus:ring-[#EF9A7A] focus:ring-offset-0 bg-[#FDF8F1] cursor-pointer mt-2 shrink-0"
-                    />
+                    <motion.div
+                      animate={{ scale: block.completed ? [1, 1.2, 1] : 1, rotate: block.completed ? [0, 10, -10, 0] : 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="mt-1.5 shrink-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={block.completed || false}
+                        onChange={() => toggleTodo(block.id)}
+                        className="w-4 h-4 rounded border-[#E2D1C3] text-[#EF9A7A] focus:ring-[#EF9A7A] focus:ring-offset-0 bg-[#FDF8F1] cursor-pointer"
+                      />
+                    </motion.div>
                     <BlockContentEditable
                       id={`input-${block.id}`}
                       html={block.content}

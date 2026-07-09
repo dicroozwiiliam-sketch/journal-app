@@ -44,7 +44,7 @@ interface JournalTimelineProps {
   onUpdateEntry: (entry: JournalEntry) => void;
   autoSelectEntryId?: string | null;
   onClearAutoSelect?: () => void;
-  onCreateEntry?: () => void;
+  onCreateEntry?: (customDate?: Date, initialTitle?: string, initialText?: string) => void;
   selectedEntry?: JournalEntry | null;
   onSelectEntry?: (entry: JournalEntry | null) => void;
   onUpdateControls?: (controls: any) => void;
@@ -101,7 +101,10 @@ export default function JournalTimeline({
   const [floatingObjects, setFloatingObjects] = useState<FloatingObject[]>([]);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco'>('text');
-  const [canvasActions, setCanvasActions] = useState<any>(null);
+  const canvasActionsRef = useRef<any>(null);
+  const setCanvasActions = (actions: any) => {
+    canvasActionsRef.current = actions;
+  };
   const lastLoadedEntryIdRef = useRef<string | null>(null);
   const [slashCommandBlockId, setSlashCommandBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
@@ -334,8 +337,12 @@ export default function JournalTimeline({
       }
     } else {
       lastLoadedEntryIdRef.current = null;
-      setBlocks([]);
-      setFloatingObjects([]);
+      if (blocks.length > 0) {
+        setBlocks([]);
+      }
+      if (floatingObjects.length > 0) {
+        setFloatingObjects([]);
+      }
     }
   }, [selectedEntry]);
 
@@ -396,14 +403,14 @@ export default function JournalTimeline({
         onSelectObject: setSelectedObjectId,
         activeTab,
         setActiveTab,
-        canvasActions,
+        canvasActions: canvasActionsRef.current,
         floatingObjects,
         updateFloatingObjects: handleUpdateFloatingObjects
       });
     } else if (onUpdateControls) {
       onUpdateControls(null);
     }
-  }, [selectedEntry, blocks, floatingObjects, isSpeaking, onUpdateControls, selectedObjectId, activeTab, canvasActions]);
+  }, [selectedEntry, blocks, floatingObjects, isSpeaking, onUpdateControls, selectedObjectId, activeTab]);
 
   const handleUpdateBlocks = (updatedBlocks: JournalBlock[]) => {
     if (!selectedEntry) return;
@@ -794,7 +801,7 @@ export default function JournalTimeline({
   }, [blocks]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-4 md:p-8" id="journal_tab">
+    <div className="w-full max-w-7xl mx-auto min-h-screen bg-cozy-bg text-cozy-text-dark flex flex-col p-6 md:p-8" id="journal_tab">
       
       <AnimatePresence mode="wait">
         {!selectedEntry ? (
@@ -807,7 +814,11 @@ export default function JournalTimeline({
             className="flex-1 flex flex-col space-y-5 pb-20"
           >
             {/* Header */}
-            <div>
+            <div className="mb-6 space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-cozy-orange/10 text-cozy-orange border border-cozy-orange/20">
+                <BookOpen size={11} strokeWidth={2.5} />
+                <span>Memory Archives</span>
+              </div>
               <h2 className="text-2xl font-black tracking-tight text-cozy-text-dark">Your Diary</h2>
               <p className="text-xs text-cozy-text-muted font-bold">Review your personal history & reflections</p>
             </div>
@@ -820,6 +831,13 @@ export default function JournalTimeline({
                 placeholder="Search transcripts, moods, tags..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  } else if (e.key === 'Escape') {
+                    setSearchQuery('');
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-3 bg-cozy-card border-2 border-cozy-text-dark focus:border-cozy-orange outline-none rounded-xl text-xs text-cozy-text-dark placeholder-cozy-text-muted/70 font-semibold transition shadow-sm"
                 id="journal_search"
               />
@@ -843,34 +861,60 @@ export default function JournalTimeline({
                 ))}
               </div>
 
-              {onCreateEntry && (
-                <button
-                  onClick={onCreateEntry}
-                  className="bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl px-4 py-2 shadow-md hover:scale-105 active:scale-95 transition-all flex items-center shrink-0 cursor-pointer"
-                  id="float_create_journal_btn"
-                >
-                  <span>+ Journal</span>
-                </button>
-              )}
+
             </div>
  
             {/* Timeline Cards */}
             <div className="flex-1 space-y-4">
               {filteredEntries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center py-16 space-y-3 bg-cozy-card/60 rounded-2xl border-2 border-dashed border-cozy-text-dark/40">
-                  <AlertCircle className="text-cozy-text-muted w-8 h-8" />
-                  <p className="text-xs text-cozy-text-muted max-w-xs leading-relaxed font-bold">
-                    No matching diary entries found. Speak your mind or type a note to seed your journal.
-                  </p>
+                <div className="flex flex-col items-center justify-center text-center py-12 px-6 space-y-6 bg-cozy-card border-3 border-cozy-text-dark rounded-3xl relative overflow-hidden shadow-sm">
+                  {/* Sun Rise Illustration */}
+                  <div className="relative flex items-center justify-center w-24 h-24 bg-gradient-to-tr from-cozy-yellow/20 to-cozy-orange/20 rounded-full border-2 border-cozy-text-dark/10 shadow-inner">
+                    <motion.div 
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                      className="absolute w-12 h-12 bg-cozy-yellow rounded-full border-2 border-cozy-text-dark flex items-center justify-center shadow-md select-none"
+                    >
+                      <span className="text-xl">🌅</span>
+                    </motion.div>
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
+                      className="absolute border border-dashed border-cozy-text-dark/15 w-20 h-20 rounded-full"
+                    />
+                  </div>
+
+                  <div className="space-y-2 max-w-sm">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-cozy-orange bg-cozy-orange/10 px-2.5 py-1 border border-cozy-orange/20 rounded-full">
+                      PEACEFUL HARBOR
+                    </span>
+                    <h3 className="text-sm font-black text-cozy-text-dark">Your timeline is peaceful today</h3>
+                    <p className="text-[10px] text-cozy-text-muted leading-relaxed font-bold">
+                      Seed your personal memory vault by creating a blank journal entry.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onCreateEntry?.()}
+                    className="px-5 py-2.5 bg-cozy-orange hover:bg-cozy-orange/90 text-white font-black text-xs rounded-xl border-2 border-cozy-text-dark shadow-sm hover:scale-[1.02] active:scale-95 transition cursor-pointer font-mono uppercase tracking-wider"
+                  >
+                    Create Blank Entry
+                  </button>
                 </div>
               ) : (
                 <div className="relative pl-4 border-l-2 border-cozy-text-dark space-y-6">
                   {filteredEntries.map((entry, idx) => (
                     <motion.div
                       key={entry.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ 
+                        type: "spring", 
+                        stiffness: 100, 
+                        damping: 15,
+                        delay: idx * 0.08 
+                      }}
                       onClick={() => {
                         setSelectedEntry(entry);
                         setEditedText(entry.transcript);
@@ -1041,7 +1085,7 @@ export default function JournalTimeline({
                   setSelectedEntry(null);
                   setIsEditing(false);
                 }}
-                className="p-2 bg-white hover:bg-[#FDF8F1] border-2 border-cozy-text-dark rounded-xl flex items-center justify-center text-cozy-text-dark shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer animate-fade-in"
+                className="p-2 bg-white border-2 border-cozy-text-dark rounded-xl flex items-center justify-center text-cozy-text-dark shadow-sm cursor-pointer animate-fade-in tactile-btn-retro"
                 title="Back to Timeline"
               >
                 <ChevronLeft size={18} strokeWidth={2.5} />
@@ -1053,7 +1097,7 @@ export default function JournalTimeline({
                     stopSpeaking();
                     onViewOnCalendar(new Date(selectedEntry.date));
                   }}
-                  className="px-3.5 py-2 bg-white hover:bg-[#FAF6EB] border-2 border-cozy-text-dark rounded-xl flex items-center gap-2 text-xs font-black text-cozy-text-dark shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer font-mono uppercase tracking-wider animate-fade-in"
+                  className="px-3.5 py-2 bg-white border-2 border-cozy-text-dark rounded-xl flex items-center gap-2 text-xs font-black text-cozy-text-dark shadow-sm cursor-pointer font-mono uppercase tracking-wider animate-fade-in tactile-btn-retro"
                   title="View this entry's date on the Calendar"
                 >
                   <Calendar size={14} className="text-cozy-orange" />
@@ -1084,9 +1128,9 @@ export default function JournalTimeline({
                   blocks={blocks} 
                   onChange={handleUpdateBlocks} 
                   showToast={showToast} 
-                  onAddImageToScrapbook={canvasActions?.spawnObject ? (url: string) => {
-                    canvasActions.spawnObject('image', { content: url, width: 160, height: 160 });
-                  } : undefined}
+                  onAddImageToScrapbook={(url: string) => {
+                    canvasActionsRef.current?.spawnObject?.('image', { content: url, width: 160, height: 160 });
+                  }}
                 />
               </div>
               

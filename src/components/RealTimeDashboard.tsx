@@ -103,7 +103,7 @@ export default function RealTimeDashboard({
   };
 
   return (
-    <div className="p-4 md:p-8 flex flex-col space-y-6 max-w-4xl mx-auto" id="realtime_dashboard">
+    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-6 p-6 md:p-8" id="realtime_dashboard">
       
       {/* 1. Header Bento Section: Dynamic Welcome, Daily Prompt, & Cozy System Clock */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -114,8 +114,8 @@ export default function RealTimeDashboard({
           
           <div>
             <div className="flex items-center gap-1.5 text-[10px] font-black text-cozy-accent uppercase tracking-widest mb-1">
-              <Sparkles size={12} className="animate-pulse text-cozy-orange" />
-              <span>Cozy Nest Core</span>
+              <Sparkles size={12} className="text-cozy-orange" />
+              <span>DayNest Space</span>
             </div>
             <h1 className="text-xl font-black tracking-tight text-cozy-text-dark capitalize">
               {getGreeting()}, {userName.split(' ')[0]}! ✨
@@ -125,9 +125,8 @@ export default function RealTimeDashboard({
             </p>
           </div>
 
-          <div className="text-[10px] font-bold text-cozy-green mt-3 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cozy-green border border-cozy-text-dark shrink-0 animate-pulse" />
-            <span>Nest core ready</span>
+          <div className="text-[10px] font-bold text-cozy-green mt-3 flex items-center gap-1">
+            <span>🌸 Aligned and active</span>
           </div>
         </div>
 
@@ -137,7 +136,7 @@ export default function RealTimeDashboard({
           
           <div>
             <div className="flex items-center gap-1.5 text-[10px] font-black text-cozy-orange uppercase tracking-widest mb-1">
-              <Sparkles size={12} className="animate-pulse text-cozy-accent" />
+              <Sparkles size={12} className="text-cozy-accent" />
               <span>Daily Reflection Prompt</span>
             </div>
             <h2 className="text-xs font-bold text-cozy-text-dark leading-relaxed mt-1 italic">
@@ -150,7 +149,7 @@ export default function RealTimeDashboard({
               setIsWritingMode(true);
               onStartRecording();
             }}
-            className="self-start text-[10px] font-black text-cozy-orange hover:text-cozy-accent uppercase tracking-wider mt-3 flex items-center gap-1"
+            className="self-start text-[10px] font-black bg-[#FAF6EB] hover:bg-cozy-orange hover:text-white border-2 border-cozy-text-dark px-3 py-1.5 rounded-xl mt-3 flex items-center gap-1 tactile-btn-retro shadow-sm text-cozy-text-dark"
           >
             <span>Write Reflection →</span>
           </button>
@@ -165,9 +164,6 @@ export default function RealTimeDashboard({
               <Clock size={12} className="text-cozy-orange" />
               <span>Local System Time</span>
             </div>
-            <span className="text-[9px] font-black bg-cozy-yellow text-cozy-text-dark px-2.5 py-0.5 rounded-full border-2 border-cozy-text-dark">
-              Ticker
-            </span>
           </div>
 
           <div className="my-2">
@@ -185,7 +181,7 @@ export default function RealTimeDashboard({
 
           <div className="text-[9px] font-black text-cozy-text-muted flex items-center justify-between">
             <span>GMT {currentTime.toTimeString().split('GMT')[1]?.split(' ')[0]}</span>
-            <span>STATUS: NESTING</span>
+            <span>Clock Tracker</span>
           </div>
         </div>
 
@@ -216,10 +212,10 @@ export default function RealTimeDashboard({
           <div className="bg-cozy-bg p-1 rounded-2xl flex border-2 border-cozy-text-dark w-full md:w-[240px] shadow-sm">
             <button
               onClick={() => setIsWritingMode(false)}
-              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border-2 ${
+              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border-2 tactile-btn-retro ${
                 !isWritingMode 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:text-cozy-text-dark'
+                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-xs' 
+                  : 'text-cozy-text-muted border-transparent bg-white hover:text-cozy-text-dark'
               }`}
             >
               <Mic size={12} strokeWidth={2.5} />
@@ -227,10 +223,10 @@ export default function RealTimeDashboard({
             </button>
             <button
               onClick={() => setIsWritingMode(true)}
-              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border-2 ${
+              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border-2 tactile-btn-retro ${
                 isWritingMode 
-                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-sm' 
-                  : 'text-cozy-text-muted border-transparent hover:text-cozy-text-dark'
+                  ? 'bg-cozy-orange text-white border-cozy-text-dark shadow-xs' 
+                  : 'text-cozy-text-muted border-transparent bg-white hover:text-cozy-text-dark'
               }`}
             >
               <FileText size={12} strokeWidth={2.5} />
@@ -240,7 +236,7 @@ export default function RealTimeDashboard({
 
           <button 
             onClick={onStartRecording}
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl cozy-shadow hover:translate-y-0.5 active:translate-y-1 transition-all"
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-cozy-orange text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl cozy-shadow tactile-btn-retro"
             id="tap_to_record_trigger_dashboard"
           >
             {isWritingMode ? (

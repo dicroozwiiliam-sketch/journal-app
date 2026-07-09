@@ -36,6 +36,19 @@
   border: 2px solid #4A3D30;
 }
 
+/* Unified Tactile Retro Button Clicks (Neobrutalist Cozy) */
+.tactile-btn-retro {
+  transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.tactile-btn-retro:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0px 0px #4A3D30 !important;
+}
+.tactile-btn-retro:active {
+  transform: translateY(1.5px);
+  box-shadow: 1px 1px 0px 0px #4A3D30 !important;
+}
+
 /* Scrollbar styling to stay warm and playful */
 ::-webkit-scrollbar {
   width: 8px;

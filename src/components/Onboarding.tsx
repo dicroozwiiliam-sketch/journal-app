@@ -163,10 +163,10 @@ export default function Onboarding({ onComplete, onGoToLogin }: OnboardingProps)
                   </div>
                   <button
                     onClick={requestMicrophone}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition tactile-btn-retro ${
                       permissions.microphone 
                         ? 'bg-cozy-green/10 text-cozy-green border-cozy-green pointer-events-none' 
-                        : 'bg-cozy-orange text-white hover:bg-cozy-accent'
+                        : 'bg-cozy-orange text-white'
                     }`}
                   >
                     {permissions.microphone ? 'Granted' : 'Enable'}
@@ -184,10 +184,10 @@ export default function Onboarding({ onComplete, onGoToLogin }: OnboardingProps)
                   </div>
                   <button
                     onClick={() => setPermissions(p => ({ ...p, notifications: true }))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition tactile-btn-retro ${
                       permissions.notifications 
                         ? 'bg-cozy-green/10 text-cozy-green border-cozy-green pointer-events-none' 
-                        : 'bg-cozy-yellow text-cozy-text-dark hover:bg-opacity-90'
+                        : 'bg-cozy-yellow text-cozy-text-dark'
                     }`}
                   >
                     {permissions.notifications ? 'Granted' : 'Enable'}
@@ -205,10 +205,10 @@ export default function Onboarding({ onComplete, onGoToLogin }: OnboardingProps)
                   </div>
                   <button
                     onClick={() => setPermissions(p => ({ ...p, speech: true }))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-cozy-text-dark transition tactile-btn-retro ${
                       permissions.speech 
                         ? 'bg-cozy-green/10 text-cozy-green border-cozy-green pointer-events-none' 
-                        : 'bg-cozy-yellow text-cozy-text-dark hover:bg-opacity-90'
+                        : 'bg-cozy-yellow text-cozy-text-dark'
                     }`}
                   >
                     {permissions.speech ? 'Granted' : 'Enable'}
@@ -246,7 +246,7 @@ export default function Onboarding({ onComplete, onGoToLogin }: OnboardingProps)
             {/* Next Button */}
             <button
               onClick={handleNext}
-              className="flex items-center gap-2 bg-cozy-orange hover:bg-cozy-accent text-white px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest border-2 border-cozy-text-dark shadow-sm transition-all"
+              className="flex items-center gap-2 bg-cozy-orange text-white px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest border-2 border-cozy-text-dark shadow-xs transition-all tactile-btn-retro"
               id="next_button"
             >
               <span>Next</span>
@@ -257,7 +257,7 @@ export default function Onboarding({ onComplete, onGoToLogin }: OnboardingProps)
           <div className="flex flex-col gap-2">
             <button
               onClick={grantAll}
-              className="w-full py-3.5 bg-cozy-orange hover:bg-cozy-accent text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl cozy-shadow hover:translate-y-0.5 transition"
+              className="w-full py-3.5 bg-cozy-orange text-white font-black text-xs uppercase tracking-widest border-3 border-cozy-text-dark rounded-2xl cozy-shadow tactile-btn-retro"
               id="continue_app_button"
             >
               Start Nested Life
