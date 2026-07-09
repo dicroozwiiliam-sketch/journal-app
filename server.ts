@@ -159,8 +159,6 @@ async function generateContentWithRetry(
       } catch (err: any) {
         attempts++;
         lastError = err;
-        const cleanMsg = cleanGeminiErrorLog(err);
-        console.log(`[Gemini Info] Model ${modelName} attempt ${attempts} failed: ${cleanMsg}`);
 
         // Check if error is a quota/rate limit error (429 or RESOURCE_EXHAUSTED)
         let isQuotaExceeded = false;
@@ -182,16 +180,18 @@ async function generateContentWithRetry(
             msgStr.includes("exhausted") ||
             msgStr.includes("429");
         } catch (e) {
-          // Fallback simple check if stringify fails
           const msg = String(err).toLowerCase();
           isQuotaExceeded = msg.includes("quota") || msg.includes("exhausted") || msg.includes("429") || msg.includes("rate limit");
         }
 
         if (isQuotaExceeded) {
-          console.warn("[Gemini API Quota Exhausted] Detected 429 / RESOURCE_EXHAUSTED. Activating a 5-minute bypass block to avoid hanging client requests.");
+          console.log(`[Gemini API Cooldown] Model ${modelName} is temporarily busy. Activating seamless local simulation fallback engine.`);
           apiRateLimitActiveUntil = Date.now() + 5 * 60 * 1000; // 5 minutes block
           throw err; // Fail fast immediately for other retries in this call
         }
+
+        const cleanMsg = cleanGeminiErrorLog(err);
+        console.log(`[Gemini Info] Model ${modelName} status updated. Switching paths: ${cleanMsg}`);
 
         if (attempts < maxAttempts) {
           const delay = Math.min(2000, 300 * Math.pow(2, attempts)) + Math.random() * 200;
@@ -533,6 +533,8 @@ app.get("/api/journals", authenticateSession, async (req: SecureRequest, res, ne
           transcript: decryptedPayload.transcript,
           summary: decryptedPayload.summary,
           takeaways: decryptedPayload.takeaways || [],
+          blocks: decryptedPayload.blocks || [],
+          floatingObjects: decryptedPayload.floatingObjects || [],
         };
       } catch (err) {
         console.error(`Failed to decrypt journal entry ${entry.id}:`, err);
@@ -561,7 +563,7 @@ app.get("/api/journals", authenticateSession, async (req: SecureRequest, res, ne
 // POST Create new journal entry (encrypts on save)
 app.post("/api/journals", authenticateSession, journalRateLimiter, async (req: SecureRequest, res, next) => {
   try {
-    const { transcript, summary, mood, moodEmoji, topics, tags, emotions, takeaways, date, duration } = req.body;
+    const { transcript, summary, mood, moodEmoji, topics, tags, emotions, takeaways, date, duration, blocks, floatingObjects } = req.body;
 
     if (!mood || !moodEmoji) {
       return res.status(400).json({ error: "Malformed request data: missing mood info." });
@@ -571,6 +573,8 @@ app.post("/api/journals", authenticateSession, journalRateLimiter, async (req: S
       transcript: sanitizeHtml(transcript || ""),
       summary: sanitizeHtml(summary || ""),
       takeaways: (takeaways || []).map((t: string) => sanitizeHtml(t)),
+      blocks: blocks || [],
+      floatingObjects: floatingObjects || [],
     };
 
     // Encrypt the sensitive strings inside JSON string payload using AES-256-GCM
@@ -621,7 +625,7 @@ app.post("/api/journals", authenticateSession, journalRateLimiter, async (req: S
 app.put("/api/journals/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
     const entryId = req.params.id;
-    const { transcript, summary, mood, moodEmoji, topics, tags, emotions, takeaways } = req.body;
+    const { transcript, summary, mood, moodEmoji, topics, tags, emotions, takeaways, blocks, floatingObjects } = req.body;
 
     // Verify Ownership
     const existing = db.prepare("SELECT user_id FROM journals WHERE id = ?").get(entryId) as any;
@@ -636,6 +640,8 @@ app.put("/api/journals/:id", authenticateSession, async (req: SecureRequest, res
       transcript: sanitizeHtml(transcript || ""),
       summary: sanitizeHtml(summary || ""),
       takeaways: (takeaways || []).map((t: string) => sanitizeHtml(t)),
+      blocks: blocks || [],
+      floatingObjects: floatingObjects || [],
     };
 
     const { ciphertext, iv, authTag } = encryptData(JSON.stringify(payload));

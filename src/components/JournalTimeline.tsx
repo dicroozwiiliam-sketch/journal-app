@@ -313,9 +313,45 @@ export default function JournalTimeline({
     return result;
   };
 
+  // Debounce saving mechanism to prevent excessive API requests and lag, while securing auto-saves
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const latestEntryRef = useRef<JournalEntry | null>(null);
+
+  const saveEntryDebounced = (updatedEntry: JournalEntry) => {
+    latestEntryRef.current = updatedEntry;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      onUpdateEntry(updatedEntry);
+      saveTimeoutRef.current = null;
+    }, 1000);
+  };
+
+  // Run on unmount to flush any pending saves
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        if (latestEntryRef.current) {
+          onUpdateEntry(latestEntryRef.current);
+        }
+      }
+    };
+  }, [onUpdateEntry]);
+
   useEffect(() => {
     if (selectedEntry) {
       if (lastLoadedEntryIdRef.current !== selectedEntry.id) {
+        // Flush any pending save for the previous entry before switching
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+          if (latestEntryRef.current) {
+            onUpdateEntry(latestEntryRef.current);
+          }
+          saveTimeoutRef.current = null;
+        }
+
         lastLoadedEntryIdRef.current = selectedEntry.id;
         const entryBlocks = initBlocksForEntry(selectedEntry);
         setBlocks(entryBlocks);
@@ -336,6 +372,15 @@ export default function JournalTimeline({
         }
       }
     } else {
+      // Flush any pending save if we are deselecting an entry
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        if (latestEntryRef.current) {
+          onUpdateEntry(latestEntryRef.current);
+        }
+        saveTimeoutRef.current = null;
+      }
+
       lastLoadedEntryIdRef.current = null;
       if (blocks.length > 0) {
         setBlocks([]);
@@ -344,7 +389,7 @@ export default function JournalTimeline({
         setFloatingObjects([]);
       }
     }
-  }, [selectedEntry]);
+  }, [selectedEntry, onUpdateEntry]);
 
   const handleUpdateFloatingObjects = (updatedObjects: FloatingObject[]) => {
     if (!selectedEntry) return;
@@ -356,7 +401,7 @@ export default function JournalTimeline({
 
     setFloatingObjects(updatedObjects);
     setSelectedEntry(updatedEntry);
-    onUpdateEntry(updatedEntry);
+    saveEntryDebounced(updatedEntry);
   };
 
   const handleAddFloatingObject = (
@@ -438,7 +483,7 @@ export default function JournalTimeline({
 
     setBlocks(updatedBlocks);
     setSelectedEntry(updatedEntry);
-    onUpdateEntry(updatedEntry);
+    saveEntryDebounced(updatedEntry);
   };
 
   const updateBlockContent = (blockId: string, content: string) => {
