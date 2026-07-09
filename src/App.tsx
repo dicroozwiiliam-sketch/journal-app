@@ -32,6 +32,8 @@ import {
   Settings
 } from 'lucide-react';
 
+import { SpeedInsights } from '@vercel/speed-insights/react';
+
 import { JournalEntry, Goal, Habit, Badge } from './types';
 import Onboarding from './components/Onboarding';
 import Auth from './components/Auth';
@@ -1559,6 +1561,7 @@ function AppContent() {
 
       </footer>
 
+      <SpeedInsights />
     </div>
   );
 }
