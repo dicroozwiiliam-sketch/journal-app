@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Mail, Lock, User, Key, Sparkles, CheckCircle, Smartphone } from "lucide-react";
 
 interface AuthProps {
-  onSuccess: (name: string, email: string, role: string, subscription_status: string) => void;
+  onSuccess: (id: string, name: string, email: string, role: string, subscription_status: string) => void;
   onBackToOnboarding: () => void;
 }
 
@@ -56,7 +56,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
 
       setSuccessMsg(`Welcome back to Daynest, ${data.user.name}! 🐾`);
       setTimeout(() => {
-        onSuccess(data.user.name, data.user.email, data.user.role, data.user.subscription_status);
+        onSuccess(data.user.id, data.user.name, data.user.email, data.user.role, data.user.subscription_status);
       }, 1000);
     } catch (err: any) {
       setError(err.message || "An error occurred during sign in.");

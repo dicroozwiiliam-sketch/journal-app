@@ -362,7 +362,13 @@ function AppContent() {
           });
           // Proceed to download secure user records
           await syncFromDatabase();
+        } else {
+          setUser(null);
+          localStorage.removeItem('voice_journal_user');
         }
+      } else {
+        setUser(null);
+        localStorage.removeItem('voice_journal_user');
       }
     } catch (err) {
       console.error("Secure session verification failed on boot:", err);
@@ -426,6 +432,15 @@ function AppContent() {
   useEffect(() => {
     localStorage.setItem('voice_journal_onboarded', String(isOnboarded));
   }, [isOnboarded]);
+
+  // Sync User to local storage
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('voice_journal_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('voice_journal_user');
+    }
+  }, [user]);
 
   // Real-time Badge Synchronization
   useEffect(() => {
@@ -763,9 +778,9 @@ function AppContent() {
   if (!user) {
     return (
       <Auth 
-        onSuccess={(name, email, role, subscription_status) => {
+        onSuccess={(id, name, email, role, subscription_status) => {
           setUser({
-            id: '',
+            id,
             name,
             email,
             streak: 27,

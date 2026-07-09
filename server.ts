@@ -361,7 +361,7 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
     res.cookie("session_token", token, {
       httpOnly: true,
       secure: true,
-      sameSite: "strict",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -386,7 +386,11 @@ app.post("/api/auth/logout", authenticateSession, async (req: SecureRequest, res
     if (req.session?.id) {
       db.prepare("DELETE FROM sessions WHERE id = ?").run(req.session.id);
     }
-    res.clearCookie("session_token");
+    res.clearCookie("session_token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
     return res.json({ message: "Logged out successfully." });
   } catch (err) {
     next(err);
@@ -399,7 +403,11 @@ app.post("/api/auth/logout-all", authenticateSession, async (req: SecureRequest,
     if (req.user?.id) {
       db.prepare("DELETE FROM sessions WHERE user_id = ?").run(req.user.id);
     }
-    res.clearCookie("session_token");
+    res.clearCookie("session_token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
     return res.json({ message: "Successfully logged out from all devices." });
   } catch (err) {
     next(err);
