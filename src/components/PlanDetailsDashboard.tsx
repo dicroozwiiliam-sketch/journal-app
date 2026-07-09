@@ -567,9 +567,7 @@ export default function PlanDetailsDashboard({
       <div className="flex border-b border-cozy-text-dark/10 gap-1 overflow-x-auto pb-0.5 font-mono">
         {([
           { id: 'workspace', label: '🛠️ modular workspace' },
-          { id: 'analytics', label: '📊 charts & trends' },
-          { id: 'automation', label: '⚡ smart automations' },
-          { id: 'notes', label: '✍️ notes & memos' }
+          { id: 'analytics', label: '📊 charts & trends' }
         ] as const).map(tb => (
           <button
             key={tb.id}

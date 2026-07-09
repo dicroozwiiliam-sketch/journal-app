@@ -158,8 +158,8 @@ export default function AiCoach({
   onCreatePageForDate 
 }: AiCoachProps) {
 
-  // Active Layout views: 'grid' | 'list' | 'kanban' | 'stats'
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'kanban' | 'stats'>('grid');
+  // Active Layout views: 'grid' | 'list'
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Search & Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -796,25 +796,7 @@ export default function AiCoach({
               </button>
             </form>
 
-            {/* Quick Presets row */}
-            <div className="flex flex-wrap items-center gap-2 mt-4 relative z-10">
-              <span className="text-[10px] font-black text-cozy-text-muted uppercase tracking-wider mr-1">💡 Suggested:</span>
-              {[
-                { label: '💍 Dream Wedding', prompt: 'Create a wedding schedule with checklist trackers and budget metrics' },
-                { label: '🇫🇷 French Sprinter', prompt: 'Structure a modular system for learning French with daily listening blocks' },
-                { label: '🏋️ Workout routine', prompt: 'Build an fitness routine tracking water counts and workouts completed' },
-                { label: '✍️ Novel chapter outline', prompt: 'Design a novel writer chapter milestones and wordcount progress builder' }
-              ].map(preset => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => setAiPrompt(preset.prompt)}
-                  className="px-3 py-1.5 bg-white hover:bg-cozy-orange hover:text-white border-2 border-cozy-text-dark rounded-xl text-[10px] font-black text-cozy-text-dark/95 cursor-pointer transition-all duration-200 shadow-xs hover:shadow-sm"
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+
 
             <AnimatePresence>
               {aiSuccessMessage && (
@@ -831,51 +813,7 @@ export default function AiCoach({
             </AnimatePresence>
           </div>
 
-          {/* Quick Stats Summary Strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-[#FAF6EB] p-5 border-3 border-cozy-text-dark rounded-3xl cozy-shadow-sm">
-            <div className="flex items-center gap-3 bg-white/60 hover:bg-white/90 border border-cozy-text-dark/10 p-3.5 rounded-2xl transition-all shadow-xs">
-              <div className="w-10 h-10 bg-cozy-orange/20 rounded-xl border-2 border-cozy-text-dark flex items-center justify-center text-cozy-orange shrink-0">
-                <Target size={18} strokeWidth={3} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-mono text-cozy-text-muted uppercase font-black tracking-wider leading-none">Total Plans</p>
-                <p className="text-sm font-black text-cozy-text-dark mt-1.5 truncate">{allPlans.length} Active</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-white/60 hover:bg-white/90 border border-cozy-text-dark/10 p-3.5 rounded-2xl transition-all shadow-xs">
-              <div className="w-10 h-10 bg-[#EFF6FF] rounded-xl border-2 border-cozy-text-dark flex items-center justify-center text-[#2563EB] shrink-0">
-                <CheckSquare size={18} strokeWidth={3} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-mono text-cozy-text-muted uppercase font-black tracking-wider leading-none">Checklists</p>
-                <p className="text-sm font-black text-cozy-text-dark mt-1.5 truncate">
-                  {allPlans.filter(p => p.modules?.checklist).length} Connected
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-white/60 hover:bg-white/90 border border-cozy-text-dark/10 p-3.5 rounded-2xl transition-all shadow-xs">
-              <div className="w-10 h-10 bg-[#FEFCE8] rounded-xl border-2 border-cozy-text-dark flex items-center justify-center text-[#CA8A04] shrink-0">
-                <Flame size={18} strokeWidth={3} className="animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-mono text-cozy-text-muted uppercase font-black tracking-wider leading-none">Habits Active</p>
-                <p className="text-sm font-black text-cozy-text-dark mt-1.5 truncate">
-                  {allPlans.reduce((acc, p) => acc + (p.modules?.habits?.streak || 0), 0)} Ticks
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-white/60 hover:bg-white/90 border border-cozy-text-dark/10 p-3.5 rounded-2xl transition-all shadow-xs">
-              <div className="w-10 h-10 bg-[#FAF5FF] rounded-xl border-2 border-cozy-text-dark flex items-center justify-center text-[#7C3AED] shrink-0">
-                <Sparkles size={18} strokeWidth={3} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-mono text-cozy-text-muted uppercase font-black tracking-wider leading-none">Automations</p>
-                <p className="text-sm font-black text-cozy-text-dark mt-1.5 truncate">
-                  {allPlans.reduce((acc, p) => acc + (p.modules?.automation?.rules?.length || 0), 0)} Rules
-                </p>
-              </div>
-            </div>
-          </div>
+
 
           {/* Filtering & View Switcher Row */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#FAF6EB] p-4 border-3 border-cozy-text-dark rounded-3xl shadow-xs">
@@ -924,9 +862,7 @@ export default function AiCoach({
             <div className="flex rounded-2xl border-2 border-cozy-text-dark overflow-hidden p-1 bg-white shrink-0 shadow-xs self-start md:self-auto">
               {([
                 { id: 'grid', label: Grid },
-                { id: 'list', label: List },
-                { id: 'kanban', label: Columns },
-                { id: 'stats', label: BarChart2 }
+                { id: 'list', label: List }
               ] as const).map(v => {
                 const IconComp = v.label;
                 return (

@@ -207,7 +207,6 @@ export const DopamineLogPanel: React.FC<DopaminePanelProps> = ({ isOpen, onClose
                   <Bell size={16} strokeWidth={3} className={unreadCount > 0 ? 'animate-bounce' : ''} />
                 </div>
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-cozy-text-dark leading-none">Dopamine Hub</h4>
                   <p className="text-[9.5px] font-bold text-cozy-text-muted mt-1 font-mono">{unreadCount} unread triggers</p>
                 </div>
               </div>
@@ -226,77 +225,6 @@ export const DopamineLogPanel: React.FC<DopaminePanelProps> = ({ isOpen, onClose
                   <X size={14} strokeWidth={2.5} />
                 </button>
               </div>
-            </div>
-
-            {/* Level progression widget */}
-            <div className="p-5 border-b-3 border-cozy-text-dark bg-white space-y-3.5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-cozy-yellow/10 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="flex justify-between items-start">
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-mono font-black text-cozy-text-muted uppercase tracking-wider">Level Rank</span>
-                  <h5 className="text-sm font-black text-cozy-text-dark">{levelInfo.name}</h5>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[9px] font-mono font-black text-cozy-text-muted uppercase tracking-wider">Cozy XP</span>
-                  <span className="text-xs font-black text-cozy-orange">{xp} XP</span>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="space-y-1.5">
-                <div className="w-full h-4 bg-cozy-bg rounded-full border-2 border-cozy-text-dark p-0.5 overflow-hidden shadow-inner relative flex items-center justify-center">
-                  <div 
-                    className="absolute left-0.5 top-0.5 bottom-0.5 rounded-full bg-cozy-orange transition-all duration-500" 
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                  <span className="relative z-10 text-[8px] font-mono font-black text-cozy-text-dark uppercase">
-                    Level {level} • {Math.round(progressPercent)}%
-                  </span>
-                </div>
-                <div className="flex justify-between text-[8px] font-mono font-black text-cozy-text-muted uppercase">
-                  <span>{levelInfo.minXp} XP</span>
-                  <span>{xpNeededForNext < 10000 ? `${levelInfo.maxXp} XP` : 'MAX LEVEL'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Desktop OS Native Notifications Request Widget */}
-            <div className="p-4 bg-[#FAF6EB] border-b-3 border-cozy-text-dark flex flex-col gap-2">
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-cozy-orange/10 border border-cozy-text-dark/10 flex items-center justify-center text-cozy-orange shrink-0">
-                  <Monitor size={14} strokeWidth={2.5} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h6 className="text-[10px] font-black text-cozy-text-dark uppercase tracking-wide leading-tight">Desktop Notifications</h6>
-                  <p className="text-[8.5px] font-bold text-cozy-text-muted leading-tight mt-0.5">
-                    {nativeNotificationStatus === 'granted' 
-                      ? 'Real system notifications are active and ready!' 
-                      : nativeNotificationStatus === 'denied'
-                      ? 'Notifications blocked by browser. Please enable in site settings.'
-                      : nativeNotificationStatus === 'unsupported'
-                      ? 'Not supported in your current browser environment.'
-                      : 'Receive real outside-app alerts for check-ins & goals.'}
-                  </p>
-                </div>
-              </div>
-
-              {nativeNotificationStatus === 'default' && (
-                <button
-                  type="button"
-                  onClick={requestNativePermission}
-                  className="w-full mt-1.5 py-1.5 bg-cozy-orange hover:bg-cozy-orange/90 text-white font-black text-[9px] rounded-lg border-2 border-cozy-text-dark shadow-xs transition hover:scale-[1.01] active:scale-95 uppercase tracking-wider font-mono"
-                >
-                  Enable Real Desktop Alerts 🔔
-                </button>
-              )}
-
-              {nativeNotificationStatus === 'granted' && (
-                <div className="mt-1 flex items-center gap-1 text-[8.5px] font-mono font-black text-emerald-600 uppercase">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                  <span>NATIVE SYSTEM NOTIFICATIONS: ACTIVE ✅</span>
-                </div>
-              )}
             </div>
 
             {/* List actions strip */}
@@ -319,71 +247,8 @@ export const DopamineLogPanel: React.FC<DopaminePanelProps> = ({ isOpen, onClose
               </div>
             )}
 
-            {/* Notifications Feed */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {notifications.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3.5">
-                  <div className="w-16 h-16 bg-cozy-bg rounded-3xl border-3 border-cozy-text-dark flex items-center justify-center text-3xl shadow-sm rotate-3 animate-pulse">
-                    🌸
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-black text-cozy-text-dark uppercase">Your Mind is Serene</p>
-                    <p className="text-[10px] text-cozy-text-muted font-bold max-w-[190px]">
-                      Complete check-ins, ticks, and goals to unlock beautiful gamified dopamine hits.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => claimNotificationXp(n.id)}
-                    className={`p-3.5 rounded-2xl border-2 border-cozy-text-dark/80 bg-white shadow-xs flex gap-3 transition-all cursor-pointer relative overflow-hidden group select-none ${
-                      n.read ? 'opacity-65 hover:opacity-100 bg-white/70' : 'hover:scale-[1.01] hover:bg-cozy-orange/5 ring-1 ring-cozy-orange/10'
-                    }`}
-                  >
-                    {/* Unread circle badge */}
-                    {!n.read && (
-                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cozy-orange animate-ping" />
-                    )}
-
-                    <div className="w-8 h-8 rounded-xl bg-cozy-bg border border-cozy-text-dark/15 flex items-center justify-center text-lg shrink-0 group-hover:scale-105 transition-transform">
-                      {n.emoji}
-                    </div>
-
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex justify-between items-baseline gap-1">
-                        <h6 className={`text-[10.5px] font-black uppercase tracking-tight truncate ${n.read ? 'text-cozy-text-dark/80' : 'text-cozy-text-dark'}`}>
-                          {n.title}
-                        </h6>
-                        <span className="text-[8px] font-mono text-cozy-text-muted font-bold shrink-0">
-                          {new Date(n.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-cozy-text-muted font-bold leading-relaxed">
-                        {n.message}
-                      </p>
-                      
-                      <div className="flex items-center gap-1.5 pt-0.5">
-                        {n.xp && (
-                          <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.2 rounded-md border ${n.read ? 'border-cozy-text-dark/10 bg-cozy-bg text-cozy-text-muted' : 'border-cozy-text-dark bg-[#FFFBEB] text-[#D97706]'}`}>
-                            +{n.xp} XP
-                          </span>
-                        )}
-                        {!n.read && (
-                          <span className="text-[8px] font-mono text-cozy-orange font-black flex items-center gap-0.5 animate-pulse">
-                            ⚡ Tap to claim reward
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
             {/* Funny addictive booster footer */}
-            <div className="p-4 bg-cozy-card border-t-3 border-cozy-text-dark flex items-center justify-between text-xs font-black">
+            <div className="p-4 bg-cozy-card border-t-3 border-cozy-text-dark flex items-center justify-between text-xs font-black mt-auto">
               <span className="text-[9px] text-cozy-text-muted uppercase tracking-wider">Level Boost Multiplier:</span>
               <span className="bg-[#FFFCEB] text-cozy-accent border-2 border-cozy-text-dark px-2.5 py-1 rounded-xl shadow-xs text-[10px]">
                 🚀 1.2x Spark Factor

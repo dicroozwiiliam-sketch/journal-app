@@ -197,14 +197,7 @@ export default function RealTimeDashboard({
             Record a cozy voice acoustic stream to align your daily ideas, plans, and execution!
           </p>
 
-          <div className="pt-2 flex flex-wrap gap-2 justify-center md:justify-start">
-            <span className="bg-cozy-yellow text-cozy-text-dark text-[10px] font-black border-2 border-cozy-text-dark px-2.5 py-0.5 rounded-full shadow-sm">
-              ✨ Free AI Digest
-            </span>
-            <span className="bg-cozy-green text-white text-[10px] font-black border-2 border-cozy-text-dark px-2.5 py-0.5 rounded-full shadow-sm">
-              🐾 Cat Friendly
-            </span>
-          </div>
+
         </div>
 
         <div className="flex flex-col items-center shrink-0 space-y-4 w-full md:w-auto">

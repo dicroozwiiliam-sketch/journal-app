@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { 
   Type, Smile, Sparkles, StickyNote, Image as ImageIcon, Paintbrush, 
   Square, Circle, Triangle, ArrowRight, Star, Heart, Undo, Redo, 
@@ -102,6 +102,7 @@ export default function FloatingCanvas({
   galleryImages = []
 }: FloatingCanvasProps) {
   const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const toolboxDragControls = useDragControls();
   const [localActiveTab, setLocalActiveTab] = useState<'text' | 'sticky' | 'emoji' | 'image' | 'shape' | 'deco'>('text');
   const [localSelectedObjectId, setLocalSelectedObjectId] = useState<string | null>(null);
 
@@ -749,32 +750,7 @@ export default function FloatingCanvas({
                     <Copy size={12} />
                   </button>
 
-                  {/* Group / Ungroup action inside overlay */}
-                  {obj.groupId ? (
-                    <button
-                      onClick={() => handleUngroup(obj.groupId!)}
-                      className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg transition cursor-pointer flex items-center gap-0.5 border border-transparent hover:border-rose-100"
-                      title="Ungroup elements"
-                    >
-                      <Scissors size={12} />
-                      <span className="text-[8px] font-black uppercase">Ungroup</span>
-                    </button>
-                  ) : (
-                    !isMultiSelectMode && (
-                      <button
-                        onClick={() => {
-                          setIsMultiSelectMode(true);
-                          setMultiSelectIds([obj.id]);
-                          showToast("Grouping Mode Active! Tap other items to select. 🔗");
-                        }}
-                        className="p-1 hover:bg-cozy-orange/15 rounded-lg text-cozy-text-dark hover:text-cozy-orange transition cursor-pointer flex items-center gap-0.5 border border-transparent hover:border-cozy-orange/20"
-                        title="Group with other elements"
-                      >
-                        <span className="text-[10px]">🔗</span>
-                        <span className="text-[8px] font-black uppercase">Group</span>
-                      </button>
-                    )
-                  )}
+
                   
                   {/* Opacity slider */}
                   <div className="flex items-center gap-1 border-l border-cozy-text-dark/15 pl-1.5 ml-0.5">
@@ -954,13 +930,21 @@ export default function FloatingCanvas({
         <AnimatePresence>
           {isToolsOpen && (
             <motion.div
+              drag
+              dragControls={toolboxDragControls}
+              dragListener={false}
+              dragMomentum={false}
+              dragElastic={0.1}
               initial={{ opacity: 0, x: 30, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 30, scale: 0.95 }}
               className="w-80 max-sm:fixed max-sm:bottom-24 max-sm:right-3 max-sm:left-3 max-sm:w-auto max-h-[75vh] max-sm:max-h-[45vh] bg-white border-3 border-cozy-text-dark rounded-2xl shadow-2xl p-4 flex flex-col text-cozy-text-dark toolbox-panel overflow-hidden cozy-shadow-lg pointer-events-auto select-none"
             >
               {/* Header with Close and Undo/Redo */}
-              <div className="flex justify-between items-center pb-2.5 mb-3 border-b-2 border-cozy-text-dark/15">
+              <div 
+                className="flex justify-between items-center pb-2.5 mb-3 border-b-2 border-cozy-text-dark/15 cursor-grab active:cursor-grabbing select-none"
+                onPointerDown={(e) => toolboxDragControls.start(e)}
+              >
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="text-cozy-orange animate-pulse w-4 h-4" />
                   <h3 className="text-xs font-black uppercase tracking-wider text-cozy-text-dark">Cozy Toolbox</h3>
@@ -1706,32 +1690,7 @@ export default function FloatingCanvas({
             )}
           </AnimatePresence>
 
-          {/* Grouping Mode Toggle Button */}
-          <button
-            onClick={() => {
-              if (isMultiSelectMode) {
-                setIsMultiSelectMode(false);
-                setMultiSelectIds([]);
-                showToast("Exited grouping mode ❌");
-              } else {
-                setIsMultiSelectMode(true);
-                setMultiSelectIds([]);
-                setSelectedObjectId(null);
-                showToast("Grouping Mode Active! Tap elements to select. 🔗");
-              }
-            }}
-            style={{
-              backgroundColor: isMultiSelectMode ? 'var(--color-cozy-orange, #EF9A7A)' : '#FFFFFF',
-              borderColor: 'var(--color-cozy-text-dark, #4A3E31)'
-            }}
-            className={`w-12 h-12 rounded-full border-3 flex flex-col items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all z-50 cursor-pointer pointer-events-auto group-toggle-btn ${
-              isMultiSelectMode ? 'text-white' : 'text-cozy-text-dark hover:bg-[#FDF8F1]'
-            }`}
-            title="Group Elements"
-          >
-            <span className="text-sm">🔗</span>
-            <span className="text-[6px] font-black tracking-tighter -mt-0.5 uppercase">Group</span>
-          </button>
+
 
           {/* Main Floating Circle Button (fixed to right center / bottom right) */}
           <button

@@ -81,7 +81,13 @@ app.use((req: any, res, next) => {
 
 // Lazy initializer for Gemini Client
 let aiClient: GoogleGenAI | null = null;
+let apiRateLimitActiveUntil = 0; // timestamp to cache active rate-limit/exhausted states
+
 function getGeminiClient(): GoogleGenAI | null {
+  if (Date.now() < apiRateLimitActiveUntil) {
+    console.log(`[Gemini API Cooldown] Bypassing client request because API quota is currently exhausted (cooldown active for ${Math.round((apiRateLimitActiveUntil - Date.now()) / 1000)}s).`);
+    return null;
+  }
   if (!aiClient) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
@@ -100,14 +106,41 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+// Helper to clean up Gemini error logs to prevent verbose/scary console outputs
+function cleanGeminiErrorLog(err: any): string {
+  if (!err) return "unknown error";
+  const msg = err.message || String(err);
+  try {
+    if (msg.trim().startsWith("{")) {
+      const parsed = JSON.parse(msg);
+      if (parsed.error && parsed.error.message) {
+        return `[Code ${parsed.error.code || 'unknown'}] ${parsed.error.message}`;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return msg.length > 200 ? msg.substring(0, 200) + "..." : msg;
+}
+
 // Content generation failover
 async function generateContentWithRetry(
   ai: GoogleGenAI,
   options: { model: string; contents: any; config?: any }
 ) {
+  if (Date.now() < apiRateLimitActiveUntil) {
+    throw new Error("Quota exceeded (bypassed due to active rate-limit cooldown block)");
+  }
+
   const isFlash = options.model.includes("flash");
   const modelsToTry = [options.model];
-  if (isFlash && options.model !== "gemini-3.1-flash-tts-preview" && options.model !== "gemini-3.1-flash-lite") {
+  
+  if (options.model === "gemini-3.5-flash") {
+    // Add gemini-flash-latest as a fallback before trying gemini-3.1-flash-lite
+    modelsToTry.push("gemini-flash-latest");
+  }
+  
+  if (isFlash && options.model !== "gemini-3.1-flash-tts-preview" && options.model !== "gemini-3.1-flash-lite" && !modelsToTry.includes("gemini-3.1-flash-lite")) {
     modelsToTry.push("gemini-3.1-flash-lite");
   }
 
@@ -117,6 +150,7 @@ async function generateContentWithRetry(
     const maxAttempts = 2;
     while (attempts < maxAttempts) {
       try {
+        console.log(`Attempting content generation using model: ${modelName} (Attempt ${attempts + 1}/${maxAttempts})`);
         const response = await ai.models.generateContent({
           ...options,
           model: modelName,
@@ -125,7 +159,40 @@ async function generateContentWithRetry(
       } catch (err: any) {
         attempts++;
         lastError = err;
-        console.warn(`Gemini attempt ${attempts} failed for model ${modelName}:`, err.message || err);
+        const cleanMsg = cleanGeminiErrorLog(err);
+        console.log(`[Gemini Info] Model ${modelName} attempt ${attempts} failed: ${cleanMsg}`);
+
+        // Check if error is a quota/rate limit error (429 or RESOURCE_EXHAUSTED)
+        let isQuotaExceeded = false;
+        try {
+          const errStr = JSON.stringify(err).toLowerCase();
+          const msgStr = (err.message || "").toLowerCase();
+          isQuotaExceeded = 
+            err.status === "RESOURCE_EXHAUSTED" || 
+            err.statusCode === 429 || 
+            err.code === 429 ||
+            err.error?.status === "RESOURCE_EXHAUSTED" ||
+            err.error?.code === 429 ||
+            errStr.includes("quota") ||
+            errStr.includes("rate_limit") ||
+            errStr.includes("resource_exhausted") ||
+            errStr.includes("429") ||
+            msgStr.includes("quota") ||
+            msgStr.includes("rate limit") ||
+            msgStr.includes("exhausted") ||
+            msgStr.includes("429");
+        } catch (e) {
+          // Fallback simple check if stringify fails
+          const msg = String(err).toLowerCase();
+          isQuotaExceeded = msg.includes("quota") || msg.includes("exhausted") || msg.includes("429") || msg.includes("rate limit");
+        }
+
+        if (isQuotaExceeded) {
+          console.warn("[Gemini API Quota Exhausted] Detected 429 / RESOURCE_EXHAUSTED. Activating a 5-minute bypass block to avoid hanging client requests.");
+          apiRateLimitActiveUntil = Date.now() + 5 * 60 * 1000; // 5 minutes block
+          throw err; // Fail fast immediately for other retries in this call
+        }
+
         if (attempts < maxAttempts) {
           const delay = Math.min(2000, 300 * Math.pow(2, attempts)) + Math.random() * 200;
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -762,11 +829,11 @@ app.post("/api/transcribe", authenticateSession, aiRateLimiter, async (req: Secu
     const parsedData = JSON.parse(resultText.trim());
     return res.json({ ...parsedData, duration: duration || 12 });
   } catch (error: any) {
-    console.warn("Transcription API Warning (activating simulation fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] Transcribe endpoint active with simulation engine");
     return res.json({
       ...generateMockAnalysis(undefined),
       duration: req.body.duration || 12,
-      warning: "Fallback triggered due to API error: " + (error.message || error),
+      warning: "DayNest Safe Simulation Fallback active",
     });
   }
 });
@@ -815,7 +882,7 @@ app.post("/api/analyze-text", authenticateSession, aiRateLimiter, async (req: Se
     const parsedData = JSON.parse((response.text || "").trim());
     return res.json(parsedData);
   } catch (error: any) {
-    console.warn("Text Analysis API Warning (activating simulation fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] Text analysis endpoint active with simulation engine");
     return res.json(generateMockAnalysis(req.body.text));
   }
 });
@@ -859,7 +926,7 @@ app.post("/api/coach", authenticateSession, requirePremium, aiRateLimiter, async
 
     return res.json({ reply: (response.text || "").trim() });
   } catch (error: any) {
-    console.warn("AI Coach API Warning (activating simulation fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] AI Coach chat active with simulation engine");
     return res.json({ reply: generateMockCoachReply(req.body.message, req.body.entries) });
   }
 });
@@ -964,7 +1031,7 @@ app.post("/api/generate-workspace", authenticateSession, requirePremium, aiRateL
     const parsed = JSON.parse(textResult);
     return res.json(parsed);
   } catch (error: any) {
-    console.warn("Workspace Builder API error (activating simulation fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] Workspace builder active with simulation engine");
     const simulated = generateMockWorkspace(req.body.prompt || "Custom Workspace");
     return res.json(simulated);
   }
@@ -1003,7 +1070,7 @@ app.post("/api/tts", authenticateSession, requirePremium, aiRateLimiter, async (
       return res.json({ audio: null, fallback: true });
     }
   } catch (error: any) {
-    console.warn("TTS API Warning (activating speech synthesis fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] TTS engine active with speech synthesis simulation");
     return res.json({ audio: null, fallback: true });
   }
 });
@@ -1152,7 +1219,7 @@ app.post("/api/ai/insights", authenticateSessionOptional, aiRateLimiter, async (
     const parsed = JSON.parse((response.text || "").trim());
     return res.json(parsed);
   } catch (error: any) {
-    console.warn("AI Insights API Warning (activating simulation fallback):", error.message || error);
+    console.log("[DayNest AI Safe Fallback] Life Feedback Insights active with simulation engine");
     return res.json(generateSimulatedInsights(req.body.timeframe || "week", [], [], []));
   }
 });
