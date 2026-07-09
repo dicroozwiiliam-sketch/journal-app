@@ -31,6 +31,7 @@ import {
   Menu,
   Settings
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 import { JournalEntry, Goal, Habit, Badge } from './types';
 import Onboarding from './components/Onboarding';
@@ -1559,6 +1560,7 @@ function AppContent() {
 
       </footer>
 
+      <Analytics />
     </div>
   );
 }
