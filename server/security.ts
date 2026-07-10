@@ -40,7 +40,15 @@ export function signSessionToken(payload: { userId: string; sessionId: string })
 export async function authenticateSession(req: SecureRequest, res: Response, next: NextFunction) {
   try {
     const cookies = parseCookies(req.headers.cookie || "");
-    const token = cookies["session_token"];
+    let token = cookies["session_token"];
+
+    // Fallback to Authorization Bearer header (crucial for iframe environments where third-party cookies are blocked)
+    if (!token && req.headers.authorization) {
+      const parts = req.headers.authorization.split(" ");
+      if (parts[0] === "Bearer" && parts[1]) {
+        token = parts[1];
+      }
+    }
 
     if (!token) {
       return res.status(401).json({ error: "Authentication required. Please log in." });
@@ -56,19 +64,19 @@ export async function authenticateSession(req: SecureRequest, res: Response, nex
     const { userId, sessionId } = decoded;
 
     // Check sessions table to verify device session is active
-    const session = db.prepare("SELECT * FROM sessions WHERE id = ? AND user_id = ?").get(sessionId, userId) as any;
+    const session = await db.getSession(sessionId, userId);
     if (!session) {
       return res.status(401).json({ error: "Session has been revoked or expired." });
     }
 
     // Check session expiration
     if (Date.now() > new Date(session.expires_at).getTime()) {
-      db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+      await db.deleteSession(sessionId);
       return res.status(401).json({ error: "Session expired. Please log in again." });
     }
 
     // Load user
-    const user = db.prepare("SELECT id, email, name, role, subscription_status, stripe_subscription_id, subscription_plan, subscription_period_end, subscription_cancel_at_period_end, subscription_trial_end, lockout_until FROM users WHERE id = ?").get(userId) as any;
+    const user = await db.getUserById(userId);
     if (!user) {
       return res.status(401).json({ error: "User associated with this session no longer exists." });
     }
@@ -80,7 +88,7 @@ export async function authenticateSession(req: SecureRequest, res: Response, nex
       // Add a small grace period buffer of 1 hour just in case of slight timing issues
       if (Date.now() > (periodEndTime + 3600 * 1000)) {
         console.log(`[SUBSCRIPTION FALLBACK] Period end ${user.subscription_period_end} passed for user ${user.id}. Downgrading to free.`);
-        db.prepare("UPDATE users SET subscription_status = 'free', subscription_plan = 'free' WHERE id = ?").run(user.id);
+        await db.updateUser(user.id, { subscription_status: 'free', subscription_plan: 'free' });
         finalStatus = "free";
       }
     }
@@ -117,7 +125,15 @@ export async function authenticateSession(req: SecureRequest, res: Response, nex
 export async function authenticateSessionOptional(req: SecureRequest, res: Response, next: NextFunction) {
   try {
     const cookies = parseCookies(req.headers.cookie || "");
-    const token = cookies["session_token"];
+    let token = cookies["session_token"];
+
+    // Fallback to Authorization Bearer header (crucial for iframe environments where third-party cookies are blocked)
+    if (!token && req.headers.authorization) {
+      const parts = req.headers.authorization.split(" ");
+      if (parts[0] === "Bearer" && parts[1]) {
+        token = parts[1];
+      }
+    }
 
     if (!token) {
       return next();
@@ -132,7 +148,7 @@ export async function authenticateSessionOptional(req: SecureRequest, res: Respo
 
     const { userId, sessionId } = decoded;
 
-    const session = db.prepare("SELECT * FROM sessions WHERE id = ? AND user_id = ?").get(sessionId, userId) as any;
+    const session = await db.getSession(sessionId, userId);
     if (!session) {
       return next();
     }
@@ -141,7 +157,7 @@ export async function authenticateSessionOptional(req: SecureRequest, res: Respo
       return next();
     }
 
-    const user = db.prepare("SELECT id, email, name, role, subscription_status, stripe_subscription_id, subscription_plan, subscription_period_end, subscription_cancel_at_period_end, subscription_trial_end, lockout_until FROM users WHERE id = ?").get(userId) as any;
+    const user = await db.getUserById(userId);
     if (!user) {
       return next();
     }

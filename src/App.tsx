@@ -45,6 +45,30 @@ import JournalToolsPanel from './components/JournalToolsPanel';
 import { DopamineNotificationProvider, useDopamine } from './context/DopamineNotificationContext';
 import { DopamineToastsStack, DopamineLogPanel } from './components/AddictiveNotificationSystem';
 
+// Intercept all fetch requests to automatically add local token Authorization header for iframe safety.
+const originalFetch = window.fetch;
+try {
+  Object.defineProperty(window, "fetch", {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: async (input: RequestInfo | URL, init?: RequestInit) => {
+      const token = localStorage.getItem("voice_journal_token");
+      if (token && typeof input === "string" && input.startsWith("/api/")) {
+        init = init || {};
+        const headers = new Headers(init.headers || {});
+        if (!headers.has("Authorization")) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+        init.headers = headers;
+      }
+      return originalFetch(input, init);
+    }
+  });
+} catch (e) {
+  console.warn("Could not redefine window.fetch via Object.defineProperty. Falling back to a custom wrapper if needed.", e);
+}
+
 // Realistic Seed Data to make the application alive and beautiful on start
 const SEED_ENTRIES: JournalEntry[] = [
   {
@@ -225,6 +249,9 @@ function AppContent() {
   // Navigation states
   const [isOnboarded, setIsOnboarded] = useState<boolean>(() => {
     try {
+      if (localStorage.getItem("voice_journal_token")) {
+        return true;
+      }
       return localStorage.getItem('voice_journal_onboarded') === 'true';
     } catch (_) {
       return false;
@@ -629,6 +656,7 @@ function AppContent() {
     }
     setUser(null);
     setIsOnboarded(false);
+    localStorage.removeItem('voice_journal_token');
     localStorage.removeItem('voice_journal_onboarded');
   };
 
@@ -640,6 +668,7 @@ function AppContent() {
     }
     setUser(null);
     setIsOnboarded(false);
+    localStorage.removeItem('voice_journal_token');
     localStorage.removeItem('voice_journal_onboarded');
   };
 

@@ -44,26 +44,16 @@ export async function syncSubscriptionToDatabase(subscription: Stripe.Subscripti
   console.log(`[STRIPE SYNC] Customer: ${customerId} | Subscription: ${subscriptionId} | Status: ${status} | Plan: ${planName} | Period End: ${periodEnd}`);
 
   // Update DB record
-  const user = db.prepare("SELECT id FROM users WHERE stripe_customer_id = ?").get(customerId) as any;
+  const user = await db.getUserByStripeCustomerId(customerId);
   if (user) {
-    db.prepare(`
-      UPDATE users 
-      SET subscription_status = ?, 
-          stripe_subscription_id = ?, 
-          subscription_plan = ?, 
-          subscription_period_end = ?, 
-          subscription_cancel_at_period_end = ?, 
-          subscription_trial_end = ?
-      WHERE id = ?
-    `).run(
-      dbStatus, 
-      subscriptionId, 
-      isPremium ? planName : "free", 
-      periodEnd, 
-      cancelAtPeriodEnd, 
-      trialEnd, 
-      user.id
-    );
+    await db.updateUser(user.id, {
+      subscription_status: dbStatus,
+      stripe_subscription_id: subscriptionId,
+      subscription_plan: isPremium ? planName : "free",
+      subscription_period_end: periodEnd,
+      subscription_cancel_at_period_end: cancelAtPeriodEnd,
+      subscription_trial_end: trialEnd,
+    });
   } else {
     // If the webhook comes before checkout metadata processes, we search for customerId via existing checkout logic or email.
     console.warn(`[STRIPE SYNC WARNING] Customer ${customerId} has no registered local account yet.`);
@@ -89,7 +79,7 @@ export async function createCheckoutSession(
   }
 
   // Find or create customer
-  const user = db.prepare("SELECT email, stripe_customer_id FROM users WHERE id = ?").get(userId) as any;
+  const user = await db.getUserById(userId);
   let customerId = user?.stripe_customer_id;
 
   if (!customerId) {
@@ -98,7 +88,7 @@ export async function createCheckoutSession(
       metadata: { userId },
     });
     customerId = customer.id;
-    db.prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?").run(customerId, userId);
+    await db.updateUser(userId, { stripe_customer_id: customerId });
   }
 
   // Price parameters for the chosen plan
@@ -151,7 +141,7 @@ export async function createPortalSession(userId: string, origin: string): Promi
     return `${origin}/?tab=profile&portal_status=returned_mock`;
   }
 
-  const user = db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(userId) as any;
+  const user = await db.getUserById(userId);
   const customerId = user?.stripe_customer_id;
 
   if (!customerId) {
@@ -184,8 +174,7 @@ export async function handleStripeWebhook(event: Stripe.Event) {
 
       if (userId && customerId) {
         // Link customer to user ID first to guarantee mapping is correct
-        db.prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?")
-          .run(customerId, userId);
+        await db.updateUser(userId, { stripe_customer_id: customerId });
       }
 
       if (subscriptionId) {
@@ -208,16 +197,17 @@ export async function handleStripeWebhook(event: Stripe.Event) {
 
       if (customerId) {
         // Downgrade user immediately to free plan
-        db.prepare(`
-          UPDATE users 
-          SET subscription_status = 'free', 
-              subscription_plan = 'free',
-              stripe_subscription_id = NULL,
-              subscription_period_end = NULL,
-              subscription_cancel_at_period_end = 0,
-              subscription_trial_end = NULL
-          WHERE stripe_customer_id = ?
-        `).run(customerId);
+        const user = await db.getUserByStripeCustomerId(customerId);
+        if (user) {
+          await db.updateUser(user.id, {
+            subscription_status: 'free',
+            subscription_plan: 'free',
+            stripe_subscription_id: null,
+            subscription_period_end: null,
+            subscription_cancel_at_period_end: 0,
+            subscription_trial_end: null,
+          });
+        }
         console.log(`[STRIPE WEBHOOK] Subscription terminated. User matching Customer ID ${customerId} downgraded to standard free tier.`);
       }
       break;
@@ -245,8 +235,13 @@ export async function handleStripeWebhook(event: Stripe.Event) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           await syncSubscriptionToDatabase(subscription);
         } else {
-          db.prepare("UPDATE users SET subscription_status = 'free', subscription_plan = 'free' WHERE stripe_customer_id = ?")
-            .run(customerId);
+          const user = await db.getUserByStripeCustomerId(customerId);
+          if (user) {
+            await db.updateUser(user.id, {
+              subscription_status: 'free',
+              subscription_plan: 'free',
+            });
+          }
         }
         console.log(`[STRIPE WEBHOOK] Invoice payment failed. Restricting premium access for customer: ${customerId}`);
       }

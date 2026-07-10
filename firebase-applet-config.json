@@ -3,7 +3,9 @@
   "appId": "1:625178385275:web:417ea65b063a0e7cba7bde",
   "apiKey": "AIzaSyDawohlkEtKlIqqkdafpbZuzP9f5YueHLs",
   "authDomain": "integrated-hangout-bsjh2.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-daynestjournal-2f0f06a9-825e-484e-935b-a7a01a32142a",
   "storageBucket": "integrated-hangout-bsjh2.firebasestorage.app",
   "messagingSenderId": "625178385275",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "625178385275-aqncn8bl7k3mk3v7ef2a30mgta4p1li6.apps.googleusercontent.com"
 }

@@ -238,7 +238,7 @@ app.post("/api/auth/signup", authRateLimiter, async (req, res, next) => {
     const sanitizedEmail = email.toLowerCase().trim();
 
     // Check if user exists
-    const existingUser = db.prepare("SELECT id FROM users WHERE email = ?").get(sanitizedEmail);
+    const existingUser = await db.getUserByEmail(sanitizedEmail);
     if (existingUser) {
       return res.status(409).json({ error: "An account with this email address already exists." });
     }
@@ -248,10 +248,17 @@ app.post("/api/auth/signup", authRateLimiter, async (req, res, next) => {
     const userId = crypto.randomUUID();
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
-    // Parameterized Insert
-    db.prepare(
-      "INSERT INTO users (id, email, name, password_hash, verification_token) VALUES (?, ?, ?, ?, ?)"
-    ).run(userId, sanitizedEmail, sanitizedName, passwordHash, verificationToken);
+    // Parameterized Insert to Firestore
+    await db.createUser(userId, {
+      email: sanitizedEmail,
+      name: sanitizedName,
+      password_hash: passwordHash,
+      verification_token: verificationToken,
+      is_verified: 0,
+      role: "user",
+      subscription_status: "free",
+      failed_attempts: 0,
+    });
 
     // Seed default goals & badges for the user
     const defaultBadges = [
@@ -262,9 +269,14 @@ app.post("/api/auth/signup", authRateLimiter, async (req, res, next) => {
       { id: "badge-5", title: "AI Coachee", description: "Had a personalized discussion with the coach.", icon: "🧠" },
     ];
     for (const b of defaultBadges) {
-      db.prepare(
-        "INSERT INTO badges (id, user_id, title, description, icon, unlocked) VALUES (?, ?, ?, ?, ?, 0)"
-      ).run(`${b.id}-${userId}`, userId, b.title, b.description, b.icon);
+      await db.saveBadge({
+        id: `${b.id}-${userId}`,
+        user_id: userId,
+        title: b.title,
+        description: b.description,
+        icon: b.icon,
+        unlocked: 0,
+      });
     }
 
     return res.status(201).json({
@@ -284,12 +296,12 @@ app.post("/api/auth/verify-email", async (req, res, next) => {
       return res.status(400).json({ error: "Missing verification token." });
     }
 
-    const user = db.prepare("SELECT id FROM users WHERE verification_token = ?").get(token) as any;
+    const user = await db.getUserByVerificationToken(token);
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired verification token." });
     }
 
-    db.prepare("UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?").run(user.id);
+    await db.updateUser(user.id, { is_verified: 1, verification_token: null });
     return res.json({ message: "Email verification successful! You can now log in." });
   } catch (err) {
     next(err);
@@ -306,7 +318,7 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
     }
 
     const sanitizedEmail = email.toLowerCase().trim();
-    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(sanitizedEmail) as any;
+    const user = await db.getUserByEmail(sanitizedEmail);
 
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password." });
@@ -323,36 +335,42 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
     // Verify Password with Argon2
     const isMatch = await argon2.verify(user.password_hash, password);
     if (!isMatch) {
-      const attempts = user.failed_attempts + 1;
+      const attempts = (user.failed_attempts || 0) + 1;
       let lockoutUntil: string | null = null;
 
       if (attempts >= 5) {
         // Lockout for 15 minutes after 5 failures
         lockoutUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        db.prepare(
-          "UPDATE users SET failed_attempts = ?, lockout_until = ? WHERE id = ?"
-        ).run(attempts, lockoutUntil, user.id);
+        await db.updateUser(user.id, {
+          failed_attempts: attempts,
+          lockout_until: lockoutUntil,
+        });
         return res.status(403).json({
           error: "Too many failed attempts. Account has been locked for 15 minutes.",
         });
       }
 
-      db.prepare("UPDATE users SET failed_attempts = ? WHERE id = ?").run(attempts, user.id);
+      await db.updateUser(user.id, { failed_attempts: attempts });
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
     // Reset lockouts on successful login
-    db.prepare("UPDATE users SET failed_attempts = 0, lockout_until = NULL WHERE id = ?").run(user.id);
+    await db.updateUser(user.id, { failed_attempts: 0, lockout_until: null });
 
-    // Create session in SQLite DB
+    // Create session in Firestore
     const sessionId = crypto.randomUUID();
     const device = sanitizeHtml(req.headers["user-agent"] || "Web Browser");
     const ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "127.0.0.1";
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days duration
 
-    db.prepare(
-      "INSERT INTO sessions (id, user_id, device_info, ip_address, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(sessionId, user.id, device, ip, new Date().toISOString(), expiresAt);
+    await db.createSession({
+      id: sessionId,
+      user_id: user.id,
+      device_info: device,
+      ip_address: ip,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    });
 
     // Generate secure JWT
     const token = signSessionToken({ userId: user.id, sessionId });
@@ -367,12 +385,106 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
 
     return res.json({
       message: "Log in successful!",
+      token, // Return token directly for iframe localStorage resilience
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
-        subscription_status: user.subscription_status,
+        role: user.role || "user",
+        subscription_status: user.subscription_status || "free",
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST Sign In / Sign Up with Google
+app.post("/api/auth/google", authRateLimiter, async (req, res, next) => {
+  try {
+    const { email, name, googleUid } = req.body;
+
+    if (!email || !googleUid) {
+      return res.status(400).json({ error: "Missing required Google auth payload." });
+    }
+
+    const sanitizedEmail = email.toLowerCase().trim();
+    let user = await db.getUserByEmail(sanitizedEmail);
+
+    if (!user) {
+      // Auto-register the Google user if they don't exist
+      const userId = googleUid;
+      await db.createUser(userId, {
+        email: sanitizedEmail,
+        name: name || "Cozy Nest User",
+        is_verified: 1, // Google users are verified
+        role: "user",
+        subscription_status: "free",
+        failed_attempts: 0,
+        google_uid: googleUid,
+      });
+
+      // Seed default goals & badges for the user
+      const defaultBadges = [
+        { id: "badge-1", title: "First Voice", description: "Recorded your first spoken reflection", icon: "🎙️" },
+        { id: "badge-2", title: "7-Day Spark", description: "Kept a 7-day journal entry streak", icon: "🔥" },
+        { id: "badge-3", title: "Goal Catalyst", description: "Achieved over 75% progress on any goal", icon: "🎯" },
+        { id: "badge-4", title: "Zen Architect", description: "Maintained a 5-day meditation streak", icon: "🧘" },
+        { id: "badge-5", title: "AI Coachee", description: "Had a personalized discussion with the coach.", icon: "🧠" },
+      ];
+      for (const b of defaultBadges) {
+        await db.saveBadge({
+          id: `${b.id}-${userId}`,
+          user_id: userId,
+          title: b.title,
+          description: b.description,
+          icon: b.icon,
+          unlocked: 0,
+        });
+      }
+
+      user = await db.getUserById(userId);
+    } else if (!user.google_uid) {
+      // Associate Google UID with existing email-based user account
+      await db.updateUser(user.id, { google_uid: googleUid, is_verified: 1 });
+      user.google_uid = googleUid;
+    }
+
+    // Create session in Firestore
+    const sessionId = crypto.randomUUID();
+    const device = sanitizeHtml(req.headers["user-agent"] || "Web Browser");
+    const ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "127.0.0.1";
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    await db.createSession({
+      id: sessionId,
+      user_id: user.id,
+      device_info: device,
+      ip_address: ip,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    });
+
+    // Generate secure JWT
+    const token = signSessionToken({ userId: user.id, sessionId });
+
+    // Store token inside Secure HttpOnly Cookie
+    res.cookie("session_token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      message: "Google sign in successful!",
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role || "user",
+        subscription_status: user.subscription_status || "free",
       },
     });
   } catch (err) {
@@ -384,7 +496,7 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
 app.post("/api/auth/logout", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
     if (req.session?.id) {
-      db.prepare("DELETE FROM sessions WHERE id = ?").run(req.session.id);
+      await db.deleteSession(req.session.id);
     }
     res.clearCookie("session_token", {
       httpOnly: true,
@@ -401,7 +513,7 @@ app.post("/api/auth/logout", authenticateSession, async (req: SecureRequest, res
 app.post("/api/auth/logout-all", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
     if (req.user?.id) {
-      db.prepare("DELETE FROM sessions WHERE user_id = ?").run(req.user.id);
+      await db.deleteSessionsByUserId(req.user.id);
     }
     res.clearCookie("session_token", {
       httpOnly: true,
@@ -423,7 +535,7 @@ app.post("/api/auth/reset-password-request", authRateLimiter, async (req, res, n
     }
 
     const sanitizedEmail = email.toLowerCase().trim();
-    const user = db.prepare("SELECT id FROM users WHERE email = ?").get(sanitizedEmail) as any;
+    const user = await db.getUserByEmail(sanitizedEmail);
 
     if (!user) {
       // Avoid user enumeration: return generic success message even if email is not in DB
@@ -435,11 +547,10 @@ app.post("/api/auth/reset-password-request", authRateLimiter, async (req, res, n
     const resetToken = crypto.randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hr expiration
 
-    db.prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?").run(
-      resetToken,
-      expires,
-      user.id
-    );
+    await db.updateUser(user.id, {
+      reset_token: resetToken,
+      reset_token_expires: expires,
+    });
 
     return res.json({
       message: "Password reset token generated.",
@@ -459,7 +570,7 @@ app.post("/api/auth/reset-password", authRateLimiter, async (req, res, next) => 
       return res.status(400).json({ error: "Password must be at least 8 characters long." });
     }
 
-    const user = db.prepare("SELECT id, reset_token_expires FROM users WHERE reset_token = ?").get(token) as any;
+    const user = await db.getUserByResetToken(token);
     if (!user) {
       return res.status(400).json({ error: "Invalid or expired password reset token." });
     }
@@ -469,9 +580,11 @@ app.post("/api/auth/reset-password", authRateLimiter, async (req, res, next) => 
     }
 
     const newHash = await argon2.hash(newPassword);
-    db.prepare(
-      "UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?"
-    ).run(newHash, user.id);
+    await db.updateUser(user.id, {
+      password_hash: newHash,
+      reset_token: null,
+      reset_token_expires: null,
+    });
 
     return res.json({ message: "Password reset successful! You can now log in." });
   } catch (err) {
@@ -487,7 +600,7 @@ app.get("/api/auth/me", authenticateSession, async (req: SecureRequest, res) => 
 // GET Active sessions (Device Management)
 app.get("/api/auth/sessions", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const sessionsList = db.prepare("SELECT id, device_info, ip_address, created_at, expires_at FROM sessions WHERE user_id = ?").all(req.user!.id);
+    const sessionsList = await db.getSessionsByUserId(req.user!.id);
     return res.json({ sessions: sessionsList, currentSessionId: req.session?.id });
   } catch (err) {
     next(err);
@@ -498,12 +611,12 @@ app.get("/api/auth/sessions", authenticateSession, async (req: SecureRequest, re
 app.delete("/api/auth/sessions/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
     const sessionId = req.params.id;
-    const result = db.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ?").run(sessionId, req.user!.id);
-    
-    if (result.changes === 0) {
+    const session = await db.getSession(sessionId, req.user!.id);
+    if (!session) {
       return res.status(404).json({ error: "Session not found." });
     }
     
+    await db.deleteSession(sessionId);
     return res.json({ message: "Session successfully revoked." });
   } catch (err) {
     next(err);
@@ -523,7 +636,7 @@ const journalRateLimiter = rateLimiter("journal", {
 // GET Journal timeline (retrieves and decrypts user's records)
 app.get("/api/journals", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const entries = db.prepare("SELECT * FROM journals WHERE user_id = ? ORDER BY date DESC").all(req.user!.id) as any[];
+    const entries = await db.getJournalsByUserId(req.user!.id);
 
     const decryptedEntries = entries.map((entry) => {
       try {
@@ -592,26 +705,24 @@ app.post("/api/journals", authenticateSession, journalRateLimiter, async (req: S
     const entryDate = date || new Date().toISOString();
     const entryDuration = duration || 0;
 
-    db.prepare(
-      "INSERT INTO journals (id, user_id, date, duration, encrypted_data, iv, auth_tag, mood, mood_emoji, topics, tags, emotions, takeaways) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(
-      entryId,
-      req.user!.id,
-      entryDate,
-      entryDuration,
-      ciphertext,
+    await db.createJournal({
+      id: entryId,
+      user_id: req.user!.id,
+      date: entryDate,
+      duration: entryDuration,
+      encrypted_data: ciphertext,
       iv,
-      authTag,
-      sanitizeHtml(mood),
-      sanitizeHtml(moodEmoji),
-      JSON.stringify(topics || []),
-      JSON.stringify(tags || []),
-      JSON.stringify(emotions || []),
-      JSON.stringify(payload.takeaways)
-    );
+      auth_tag: authTag,
+      mood: sanitizeHtml(mood),
+      mood_emoji: sanitizeHtml(moodEmoji),
+      topics: JSON.stringify(topics || []),
+      tags: JSON.stringify(tags || []),
+      emotions: JSON.stringify(emotions || []),
+      takeaways: JSON.stringify(payload.takeaways),
+    });
 
     // Update streak counter in users
-    db.prepare("UPDATE users SET failed_attempts = 0 WHERE id = ?").run(req.user!.id); // reset failed lockouts indicator
+    await db.updateUser(req.user!.id, { failed_attempts: 0 }); // reset failed lockouts indicator
 
     return res.status(201).json({
       id: entryId,
@@ -636,7 +747,7 @@ app.put("/api/journals/:id", authenticateSession, async (req: SecureRequest, res
     const { transcript, summary, mood, moodEmoji, topics, tags, emotions, takeaways, blocks, floatingObjects } = req.body;
 
     // Verify Ownership
-    const existing = db.prepare("SELECT user_id FROM journals WHERE id = ?").get(entryId) as any;
+    const existing = await db.getJournalById(entryId);
     if (!existing) {
       return res.status(404).json({ error: "Journal entry not found." });
     }
@@ -654,20 +765,17 @@ app.put("/api/journals/:id", authenticateSession, async (req: SecureRequest, res
 
     const { ciphertext, iv, authTag } = encryptData(JSON.stringify(payload));
 
-    db.prepare(
-      "UPDATE journals SET encrypted_data = ?, iv = ?, auth_tag = ?, mood = ?, mood_emoji = ?, topics = ?, tags = ?, emotions = ?, takeaways = ? WHERE id = ?"
-    ).run(
-      ciphertext,
+    await db.updateJournal(entryId, {
+      encrypted_data: ciphertext,
       iv,
-      authTag,
-      sanitizeHtml(mood),
-      sanitizeHtml(moodEmoji),
-      JSON.stringify(topics || []),
-      JSON.stringify(tags || []),
-      JSON.stringify(emotions || []),
-      JSON.stringify(payload.takeaways),
-      entryId
-    );
+      auth_tag: authTag,
+      mood: sanitizeHtml(mood),
+      mood_emoji: sanitizeHtml(moodEmoji),
+      topics: JSON.stringify(topics || []),
+      tags: JSON.stringify(tags || []),
+      emotions: JSON.stringify(emotions || []),
+      takeaways: JSON.stringify(payload.takeaways),
+    });
 
     return res.json({ message: "Journal entry updated successfully." });
   } catch (err) {
@@ -681,7 +789,7 @@ app.delete("/api/journals/:id", authenticateSession, async (req: SecureRequest, 
     const entryId = req.params.id;
 
     // Verify Ownership
-    const existing = db.prepare("SELECT user_id FROM journals WHERE id = ?").get(entryId) as any;
+    const existing = await db.getJournalById(entryId);
     if (!existing) {
       return res.status(404).json({ error: "Journal entry not found." });
     }
@@ -689,7 +797,7 @@ app.delete("/api/journals/:id", authenticateSession, async (req: SecureRequest, 
       return res.status(403).json({ error: "Unauthorized access to this resource." });
     }
 
-    db.prepare("DELETE FROM journals WHERE id = ?").run(entryId);
+    await db.deleteJournal(entryId);
     return res.json({ message: "Journal entry deleted successfully." });
   } catch (err) {
     next(err);
@@ -723,9 +831,14 @@ app.post("/api/voice/upload", authenticateSession, uploadRateLimiter, async (req
     const buffer = Buffer.from(audio, "base64");
     await fs.promises.writeFile(filePath, buffer);
 
-    db.prepare(
-      "INSERT INTO voice_recordings (id, user_id, file_path, mime_type, duration, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(fileId, req.user!.id, filePath, mimeType || "audio/webm", duration || 0, new Date().toISOString());
+    await db.createRecording({
+      id: fileId,
+      user_id: req.user!.id,
+      file_path: filePath,
+      mime_type: mimeType || "audio/webm",
+      duration: duration || 0,
+      created_at: new Date().toISOString(),
+    });
 
     // Generate secure temporary signature URL
     const signedUrl = generateSignedUrl(fileId, 30); // 30 minutes duration
@@ -755,7 +868,7 @@ app.get("/api/voice/download", async (req, res, next) => {
     }
 
     // Load file path and make sure traversal is impossible
-    const fileRecord = db.prepare("SELECT file_path, mime_type FROM voice_recordings WHERE id = ?").get(id) as any;
+    const fileRecord = await db.getRecordingById(id);
     if (!fileRecord) {
       return res.status(404).json({ error: "Audio file not found." });
     }
@@ -1103,7 +1216,7 @@ app.post("/api/ai/insights", authenticateSessionOptional, aiRateLimiter, async (
 
     if (req.user) {
       // 1. Fetch journals from DB
-      const entries = db.prepare("SELECT * FROM journals WHERE user_id = ? ORDER BY date DESC").all(req.user.id) as any[];
+      const entries = await db.getJournalsByUserId(req.user.id);
       decryptedEntries = entries.map((entry) => {
         try {
           const rawJson = decryptData(entry.encrypted_data, entry.iv, entry.auth_tag);
@@ -1126,7 +1239,7 @@ app.post("/api/ai/insights", authenticateSessionOptional, aiRateLimiter, async (
       }).filter(Boolean);
 
       // 2. Fetch habits from DB
-      const habitsList = db.prepare("SELECT * FROM habits WHERE user_id = ?").all(req.user.id) as any[];
+      const habitsList = await db.getHabitsByUserId(req.user.id);
       formattedHabits = habitsList.map((h) => ({
         name: h.name,
         streak: h.streak,
@@ -1134,7 +1247,7 @@ app.post("/api/ai/insights", authenticateSessionOptional, aiRateLimiter, async (
       }));
 
       // 3. Fetch goals from DB
-      const goalsList = db.prepare("SELECT * FROM goals WHERE user_id = ?").all(req.user.id) as any[];
+      const goalsList = await db.getGoalsByUserId(req.user.id);
       formattedGoals = goalsList.map((g) => ({
         title: g.title,
         category: g.category,
@@ -1343,7 +1456,7 @@ function generateSimulatedInsights(timeframe: string, entries: any[], habits: an
 // GET goals
 app.get("/api/goals", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const goalsList = db.prepare("SELECT * FROM goals WHERE user_id = ?").all(req.user!.id) as any[];
+    const goalsList = await db.getGoalsByUserId(req.user!.id);
     const formatted = goalsList.map((g) => ({
       id: g.id,
       title: g.title,
@@ -1367,17 +1480,15 @@ app.post("/api/goals", authenticateSession, async (req: SecureRequest, res, next
     }
 
     const goalId = id || crypto.randomUUID();
-    db.prepare(
-      "INSERT OR REPLACE INTO goals (id, user_id, title, category, progress, deadline, actions) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(
-      goalId,
-      req.user!.id,
-      sanitizeHtml(title),
-      sanitizeHtml(category),
-      progress || 0,
-      deadline || new Date().toISOString().split("T")[0],
-      JSON.stringify(actions || [])
-    );
+    await db.saveGoal({
+      id: goalId,
+      user_id: req.user!.id,
+      title: sanitizeHtml(title),
+      category: sanitizeHtml(category),
+      progress: progress || 0,
+      deadline: deadline || new Date().toISOString().split("T")[0],
+      actions: JSON.stringify(actions || []),
+    });
 
     return res.json({ message: "Goal updated." });
   } catch (err) {
@@ -1388,7 +1499,7 @@ app.post("/api/goals", authenticateSession, async (req: SecureRequest, res, next
 // DELETE Goal
 app.delete("/api/goals/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    db.prepare("DELETE FROM goals WHERE id = ? AND user_id = ?").run(req.params.id, req.user!.id);
+    await db.deleteGoal(req.params.id);
     return res.json({ message: "Goal deleted." });
   } catch (err) {
     next(err);
@@ -1398,7 +1509,7 @@ app.delete("/api/goals/:id", authenticateSession, async (req: SecureRequest, res
 // GET Habits
 app.get("/api/habits", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const habitsList = db.prepare("SELECT * FROM habits WHERE user_id = ?").all(req.user!.id) as any[];
+    const habitsList = await db.getHabitsByUserId(req.user!.id);
     const formatted = habitsList.map((h) => ({
       id: h.id,
       name: h.name,
@@ -1418,9 +1529,13 @@ app.post("/api/habits", authenticateSession, async (req: SecureRequest, res, nex
     if (!name) return res.status(400).json({ error: "Habit name required." });
 
     const habitId = id || crypto.randomUUID();
-    db.prepare(
-      "INSERT OR REPLACE INTO habits (id, user_id, name, streak, history) VALUES (?, ?, ?, ?, ?)"
-    ).run(habitId, req.user!.id, sanitizeHtml(name), streak || 0, JSON.stringify(history || {}));
+    await db.saveHabit({
+      id: habitId,
+      user_id: req.user!.id,
+      name: sanitizeHtml(name),
+      streak: streak || 0,
+      history: JSON.stringify(history || {}),
+    });
 
     return res.json({ message: "Habit saved." });
   } catch (err) {
@@ -1431,7 +1546,7 @@ app.post("/api/habits", authenticateSession, async (req: SecureRequest, res, nex
 // DELETE Habit
 app.delete("/api/habits/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    db.prepare("DELETE FROM habits WHERE id = ? AND user_id = ?").run(req.params.id, req.user!.id);
+    await db.deleteHabit(req.params.id);
     return res.json({ message: "Habit deleted." });
   } catch (err) {
     next(err);
@@ -1441,7 +1556,7 @@ app.delete("/api/habits/:id", authenticateSession, async (req: SecureRequest, re
 // GET Badges
 app.get("/api/badges", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const badgesList = db.prepare("SELECT * FROM badges WHERE user_id = ?").all(req.user!.id) as any[];
+    const badgesList = await db.getBadgesByUserId(req.user!.id);
     const formatted = badgesList.map((b) => ({
       id: b.id.split("-")[0], // Trim userId mapping
       title: b.title,
@@ -1461,11 +1576,10 @@ app.post("/api/badges/unlock", authenticateSession, async (req: SecureRequest, r
   try {
     const { id } = req.body;
     const mappedId = `${id}-${req.user!.id}`;
-    db.prepare("UPDATE badges SET unlocked = 1, unlocked_at = ? WHERE id = ? AND user_id = ?").run(
-      new Date().toISOString().split("T")[0],
-      mappedId,
-      req.user!.id
-    );
+    await db.updateBadge(mappedId, {
+      unlocked: 1,
+      unlocked_at: new Date().toISOString().split("T")[0],
+    });
     return res.json({ message: "Badge unlocked." });
   } catch (err) {
     next(err);
@@ -1512,16 +1626,14 @@ app.post("/api/stripe/mock-upgrade", authenticateSession, async (req: SecureRequ
     const periodEnd = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
     const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    db.prepare(`
-      UPDATE users 
-      SET subscription_status = 'premium',
-          subscription_plan = ?,
-          stripe_subscription_id = ?,
-          subscription_period_end = ?,
-          subscription_cancel_at_period_end = 0,
-          subscription_trial_end = ?
-      WHERE id = ?
-    `).run(plan, `sub_mock_${crypto.randomUUID().slice(0, 8)}`, periodEnd, trialEnd, req.user!.id);
+    await db.updateUser(req.user!.id, {
+      subscription_status: 'premium',
+      subscription_plan: plan,
+      stripe_subscription_id: `sub_mock_${crypto.randomUUID().slice(0, 8)}`,
+      subscription_period_end: periodEnd,
+      subscription_cancel_at_period_end: 0,
+      subscription_trial_end: trialEnd,
+    });
 
     console.log(`[STRIPE MOCK] Server upgraded user ${req.user!.id} to mock ${plan} subscription.`);
     return res.json({ 

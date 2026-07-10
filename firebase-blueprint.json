@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account details",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "is_verified": { "type": "integer" },
+        "role": { "type": "string" },
+        "subscription_status": { "type": "string" },
+        "failed_attempts": { "type": "integer" },
+        "google_uid": { "type": "string" }
+      },
+      "required": ["email"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "User login session",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "device_info": { "type": "string" },
+        "ip_address": { "type": "string" },
+        "created_at": { "type": "string" },
+        "expires_at": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "Journal": {
+      "title": "Journal",
+      "description": "Voice journal entry",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "User goal",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "User habit",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "Badge": {
+      "title": "Badge",
+      "description": "User badge",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "Recording": {
+      "title": "Recording",
+      "description": "Voice recording metadata",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Active sessions"
+    },
+    "/journals/{journalId}": {
+      "schema": "Journal",
+      "description": "Journal entries"
+    },
+    "/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User goals"
+    },
+    "/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "User habits"
+    },
+    "/badges/{badgeId}": {
+      "schema": "Badge",
+      "description": "Unlocked badges"
+    },
+    "/voice_recordings/{recordingId}": {
+      "schema": "Recording",
+      "description": "Voice recordings"
+    }
+  }
+}
