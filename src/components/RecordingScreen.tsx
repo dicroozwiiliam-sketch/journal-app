@@ -103,10 +103,10 @@ export default function RecordingScreen({ onSave, onCancel, isWritingMode = fals
     } catch (err: any) {
       console.error("Error accessing microphone:", err);
       let errMsg = "Microphone access is restricted.";
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.message?.toLowerCase().includes('denied') || err.message?.toLowerCase().includes('permission')) {
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err.message?.toLowerCase().includes('denied') || err.message?.toLowerCase().includes('permission')) {
         errMsg = "Microphone access was denied. Since you are using a preview iframe, please ensure you allow microphone permissions in your browser or try opening the application in a new tab using the button at the top right. Alternatively, you can write your journal entry manually using written mode.";
       } else {
-        errMsg = `Could not access microphone: ${err.message || err.name || err}. Please check permissions or switch to written mode.`;
+        errMsg = `Could not access microphone: ${err.message || err?.name || err}. Please check permissions or switch to written mode.`;
       }
       setMicError(errMsg);
     }

@@ -223,7 +223,7 @@ export default function GalleryBlock({
             >
               <X size={16} />
             </button>
-            <img 
+            <img loading="lazy" 
               src={zoomedImage} 
               alt="Zoomed" 
               className="max-w-full max-h-[80vh] object-contain rounded-lg"

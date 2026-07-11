@@ -328,89 +328,99 @@ export default function FloatingCanvas({
 
   // Global mouse move and mouse up handlers for drag / resize / rotate interactions
   useEffect(() => {
+    let rafId: number | null = null;
+    let isDragging = false;
     const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
       if (!interaction.type || !interaction.objId || !canvasRef.current) return;
       
       const targetObj = selectedObjectRef.current;
       if (!targetObj || targetObj.isLocked) return;
 
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      const rect = canvasRef.current.getBoundingClientRect();
+      if (!isDragging) {
+        isDragging = true;
+        rafId = requestAnimationFrame(() => {
+          const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+          const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+          const rect = canvasRef.current!.getBoundingClientRect();
 
-      if (interaction.type === 'move') {
-        const deltaX = clientX - interaction.startX;
-        const deltaY = clientY - interaction.startY;
-        
-        // Convert pixel delta to percentage
-        const deltaXPercent = (deltaX / rect.width) * 100;
-        const deltaYPercent = (deltaY / rect.height) * 100;
+          if (interaction.type === 'move') {
+            const deltaX = clientX - interaction.startX;
+            const deltaY = clientY - interaction.startY;
+            
+            // Convert pixel delta to percentage
+            const deltaXPercent = (deltaX / rect.width) * 100;
+            const deltaYPercent = (deltaY / rect.height) * 100;
 
-        const updated = floatingObjects.map(o => {
-          if (interaction.startGroupPositions && o.id in interaction.startGroupPositions) {
-            const startPos = interaction.startGroupPositions[o.id];
-            let newX = startPos.x + deltaXPercent;
-            let newY = startPos.y + deltaYPercent;
+            const updated = floatingObjects.map(o => {
+              if (interaction.startGroupPositions && o.id in interaction.startGroupPositions) {
+                const startPos = interaction.startGroupPositions[o.id];
+                let newX = startPos.x + deltaXPercent;
+                let newY = startPos.y + deltaYPercent;
 
-            // Soft boundaries (-20% to 110%) to allow beautiful bleeding off the edges
-            newX = Math.max(-20, Math.min(110, newX));
-            newY = Math.max(-5, Math.min(110, newY));
+                // Soft boundaries (-20% to 110%) to allow beautiful bleeding off the edges
+                newX = Math.max(-20, Math.min(110, newX));
+                newY = Math.max(-5, Math.min(110, newY));
 
-            return {
-              ...o,
-              x: parseFloat(newX.toFixed(2)),
-              y: parseFloat(newY.toFixed(2))
-            };
-          } else if (o.id === interaction.objId) {
-            let newX = interaction.startLeft + deltaXPercent;
-            let newY = interaction.startTop + deltaYPercent;
+                return {
+                  ...o,
+                  x: parseFloat(newX.toFixed(2)),
+                  y: parseFloat(newY.toFixed(2))
+                };
+              } else if (o.id === interaction.objId) {
+                let newX = interaction.startLeft + deltaXPercent;
+                let newY = interaction.startTop + deltaYPercent;
 
-            newX = Math.max(-20, Math.min(110, newX));
-            newY = Math.max(-5, Math.min(110, newY));
+                newX = Math.max(-20, Math.min(110, newX));
+                newY = Math.max(-5, Math.min(110, newY));
 
-            return { ...o, x: parseFloat(newX.toFixed(2)), y: parseFloat(newY.toFixed(2)) };
+                return { ...o, x: parseFloat(newX.toFixed(2)), y: parseFloat(newY.toFixed(2)) };
+              }
+              return o;
+            });
+            onChange(updated); // Live preview without creating history states instantly
+          } 
+          else if (interaction.type === 'resize') {
+            const deltaX = clientX - interaction.startX;
+            const deltaY = clientY - interaction.startY;
+
+            const newWidth = Math.max(50, interaction.startWidth + deltaX);
+            const newHeight = Math.max(40, interaction.startHeight + deltaY);
+
+            const updated = floatingObjects.map(o => {
+              if (o.id === interaction.objId) {
+                return { ...o, width: Math.round(newWidth), height: Math.round(newHeight) };
+              }
+              return o;
+            });
+            onChange(updated);
+          } 
+          else if (interaction.type === 'rotate') {
+            // Calculate angle between element center and cursor
+            const angleRad = Math.atan2(clientY - interaction.centerY, clientX - interaction.centerX);
+            let angleDeg = angleRad * (180 / Math.PI) + 90; // Add 90 offset to align top handle
+            
+            const updated = floatingObjects.map(o => {
+              if (o.id === interaction.objId) {
+                return { ...o, rotation: Math.round(angleDeg) };
+              }
+              return o;
+            });
+            onChange(updated);
           }
-          return o;
+          isDragging = false;
         });
-        onChange(updated); // Live preview without creating history states instantly
-      } 
-      else if (interaction.type === 'resize') {
-        const deltaX = clientX - interaction.startX;
-        const deltaY = clientY - interaction.startY;
-
-        const newWidth = Math.max(50, interaction.startWidth + deltaX);
-        const newHeight = Math.max(40, interaction.startHeight + deltaY);
-
-        const updated = floatingObjects.map(o => {
-          if (o.id === interaction.objId) {
-            return { ...o, width: Math.round(newWidth), height: Math.round(newHeight) };
-          }
-          return o;
-        });
-        onChange(updated);
-      } 
-      else if (interaction.type === 'rotate') {
-        // Calculate angle between element center and cursor
-        const angleRad = Math.atan2(clientY - interaction.centerY, clientX - interaction.centerX);
-        let angleDeg = angleRad * (180 / Math.PI) + 90; // Add 90 offset to align top handle
-        
-        // Snap to nearest 45 degrees if Shift is pressed
-        if ('shiftKey' in e && e.shiftKey) {
-          angleDeg = Math.round(angleDeg / 45) * 45;
-        }
-
-        const updated = floatingObjects.map(o => {
-          if (o.id === interaction.objId) {
-            return { ...o, rotation: Math.round(angleDeg) };
-          }
-          return o;
-        });
-        onChange(updated);
       }
     };
 
+    
     const handleGlobalEnd = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+        isDragging = false;
+      }
       if (interaction.type) {
+
         // Commit final state to history once drag/resize ends
         saveState(floatingObjects);
         setInteraction({
@@ -856,7 +866,7 @@ export default function FloatingCanvas({
                 {obj.type === 'image' && (
                   <div className="w-full h-full bg-white p-2 border-2 border-cozy-text-dark shadow-md flex flex-col rounded-sm">
                     {obj.content ? (
-                      <img 
+                      <img loading="lazy" 
                         src={obj.content} 
                         alt="Scrapbook collage" 
                         className="w-full h-full object-cover rounded-xs border border-cozy-text-dark/10"
@@ -1254,7 +1264,7 @@ export default function FloatingCanvas({
                               onClick={() => spawnObject('image', { content: imgUrl, width: 160, height: 160 })}
                               className="group relative h-14 rounded-lg overflow-hidden border border-cozy-text-dark/20 cursor-pointer hover:border-cozy-orange transition hover:scale-105 animate-fade-in"
                             >
-                              <img src={imgUrl} alt={`Gallery image ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <img loading="lazy" src={imgUrl} alt={`Gallery image ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                                 <span className="text-[8px] text-white font-black uppercase tracking-wider">Pin</span>
                               </div>
@@ -2325,6 +2335,98 @@ function DecorativeRenderer({
           <ellipse cx="66" cy="58" rx="3" ry="5.5" transform="rotate(15 66 58)" fill="#FCF8F2" stroke="#4D5A3C" strokeWidth="2" />
           <ellipse cx="40" cy="74" rx="2.5" ry="4.5" transform="rotate(-5 40 74)" fill="#FCF8F2" stroke="#4D5A3C" strokeWidth="1.8" />
           <ellipse cx="60" cy="74" rx="2.5" ry="4.5" transform="rotate(5 60 74)" fill="#FCF8F2" stroke="#4D5A3C" strokeWidth="1.8" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (type === 'cute-dog') {
+    return (
+      <div className="w-full h-full relative flex items-center justify-center opacity-90 hover:opacity-100 transition">
+        <svg viewBox="0 0 100 100" className="w-full h-full stroke-[#4A3E31] fill-none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {/* Dog Head */}
+          <path d="M 50,20 C 30,20 28,45 28,60 C 28,75 35,80 50,80 C 65,80 72,75 72,60 C 72,45 70,20 50,20 Z" fill="#F4F1EA" />
+          {/* Left Ear */}
+          <path d="M 29,25 C 15,25 10,48 18,52 C 26,56 30,40 29,25 Z" fill="#DDBB99" />
+          {/* Right Ear */}
+          <path d="M 71,25 C 85,25 90,48 82,52 C 74,56 70,40 71,25 Z" fill="#DDBB99" />
+          {/* Snout */}
+          <ellipse cx="50" cy="65" rx="12" ry="8" fill="#E8DCC4" />
+          {/* Nose */}
+          <path d="M 46,60 H 54 C 54,60 54,65 50,67 C 46,65 46,60 46,60 Z" fill="#4A3E31" />
+          {/* Mouth */}
+          <path d="M 48,67 Q 50,70 52,67" stroke="#4A3E31" strokeWidth="2" />
+          {/* Eyes */}
+          <circle cx="40" cy="48" r="4" fill="#4A3E31" />
+          <circle cx="60" cy="48" r="4" fill="#4A3E31" />
+          <circle cx="38.5" cy="46.5" r="1" fill="#FCF8F2" />
+          <circle cx="58.5" cy="46.5" r="1" fill="#FCF8F2" />
+          {/* Rosy Cheeks */}
+          <circle cx="32" cy="56" r="3.5" fill="#EF9A7A" fillOpacity="0.5" />
+          <circle cx="68" cy="56" r="3.5" fill="#EF9A7A" fillOpacity="0.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (type === 'cute-cat') {
+    return (
+      <div className="w-full h-full relative flex items-center justify-center opacity-90 hover:opacity-100 transition">
+        <svg viewBox="0 0 100 100" className="w-full h-full stroke-[#4A3E31] fill-none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {/* Head */}
+          <ellipse cx="50" cy="55" rx="26" ry="22" fill="#FAF5EC" />
+          {/* Left Ear */}
+          <polygon points="26,42 16,16 38,36" fill="#FAF5EC" />
+          <polygon points="28,39 21,21 34,35" fill="#EF9A7A" fillOpacity="0.3" />
+          {/* Right Ear */}
+          <polygon points="74,42 84,16 62,36" fill="#FAF5EC" />
+          <polygon points="72,39 79,21 66,35" fill="#EF9A7A" fillOpacity="0.3" />
+          {/* Eyes */}
+          <circle cx="38" cy="52" r="3" fill="#4A3E31" />
+          <circle cx="62" cy="52" r="3" fill="#4A3E31" />
+          {/* Nose */}
+          <polygon points="48,59 52,59 50,62" fill="#EF9A7A" />
+          {/* Whiskers */}
+          <path d="M 22,56 H 10 M 22,60 L 11,63 M 78,56 H 90 M 78,60 L 89,63" stroke="#4A3E31" strokeWidth="2" />
+          {/* Mouth */}
+          <path d="M 46,65 Q 50,68 50,65 Q 50,68 54,65" stroke="#4A3E31" strokeWidth="2" />
+          {/* Cheeks */}
+          <circle cx="32" cy="58" r="3" fill="#EF9A7A" fillOpacity="0.5" />
+          <circle cx="68" cy="58" r="3" fill="#EF9A7A" fillOpacity="0.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (type === 'cute-cow') {
+    return (
+      <div className="w-full h-full relative flex items-center justify-center opacity-90 hover:opacity-100 transition">
+        <svg viewBox="0 0 100 100" className="w-full h-full stroke-[#4A3E31] fill-none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {/* Horns */}
+          <path d="M 32,25 Q 26,10 20,16" stroke="#C8C0B0" strokeWidth="4.5" fill="none" />
+          <path d="M 68,25 Q 74,10 80,16" stroke="#C8C0B0" strokeWidth="4.5" fill="none" />
+          {/* Ears */}
+          <path d="M 28,34 Q 10,34 16,42 Q 22,46 28,38 Z" fill="#F4F1EA" />
+          <path d="M 72,34 Q 90,34 84,42 Q 78,46 72,38 Z" fill="#F4F1EA" />
+          <path d="M 20,36 Q 14,36 18,40 Z" fill="#EF9A7A" fillOpacity="0.4" />
+          <path d="M 80,36 Q 86,36 82,40 Z" fill="#EF9A7A" fillOpacity="0.4" />
+          {/* Head base */}
+          <rect x="28" y="26" width="44" height="42" rx="16" fill="#F4F1EA" />
+          {/* Spots */}
+          <path d="M 29,32 Q 38,36 34,44 Q 28,40 29,32 Z" fill="#4A3E31" stroke="none" />
+          <path d="M 68,44 Q 60,48 64,55 Q 72,50 68,44 Z" fill="#4A3E31" stroke="none" />
+          {/* Big Snout */}
+          <rect x="24" y="52" width="52" height="28" rx="14" fill="#F9D4C3" />
+          {/* Nostrils */}
+          <ellipse cx="40" cy="66" rx="3" ry="2" fill="#4A3E31" stroke="none" />
+          <ellipse cx="60" cy="66" rx="3" ry="2" fill="#4A3E31" stroke="none" />
+          {/* Smile */}
+          <path d="M 46,72 Q 50,75 54,72" stroke="#4A3E31" strokeWidth="1.8" />
+          {/* Eyes */}
+          <circle cx="40" cy="42" r="3.5" fill="#4A3E31" />
+          <circle cx="60" cy="42" r="3.5" fill="#4A3E31" />
+          <circle cx="38.5" cy="40.5" r="1" fill="#FCF8F2" />
+          <circle cx="58.5" cy="40.5" r="1" fill="#FCF8F2" />
         </svg>
       </div>
     );

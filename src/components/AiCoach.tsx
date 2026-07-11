@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Target, 
@@ -163,6 +163,7 @@ export default function AiCoach({
 
   // Search & Filters State
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
 
@@ -266,7 +267,7 @@ export default function AiCoach({
     });
 
     // 2. Converted legacy habits
-    const convertedHabits = habits.map(h => {
+    const convertedHabits = habits.filter(h => h && h.name).map(h => {
       return {
         id: h.id,
         title: h.name,
@@ -309,10 +310,10 @@ export default function AiCoach({
   const filteredPlans = useMemo(() => {
     return allPlans.filter(p => {
       const matchSearch = 
-        p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.tags?.some((t: string) => t.toLowerCase().includes(searchTerm.toLowerCase()));
+        p.title?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+        p.description?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+        p.category?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+        p.tags?.some((t: string) => t.toLowerCase().includes(deferredSearchTerm.toLowerCase()));
       
       const matchCategory = categoryFilter === 'all' || p.category === categoryFilter;
       const matchPriority = priorityFilter === 'all' || p.priority === priorityFilter;

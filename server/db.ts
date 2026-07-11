@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, orderBy, limit, writeBatch, runTransaction } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -92,7 +92,7 @@ export const db = {
 
   getUserByEmail: async (email: string): Promise<any | null> => {
     try {
-      const q = query(collection(firestore, "users"), where("email", "==", email));
+      const q = query(collection(firestore, "users"), where("email", "==", email), limit(1));
       const querySnap = await getDocs(q);
       if (querySnap.empty) return null;
       const firstDoc = querySnap.docs[0];
@@ -105,7 +105,7 @@ export const db = {
 
   getUserByVerificationToken: async (token: string): Promise<any | null> => {
     try {
-      const q = query(collection(firestore, "users"), where("verification_token", "==", token));
+      const q = query(collection(firestore, "users"), where("verification_token", "==", token), limit(1));
       const querySnap = await getDocs(q);
       if (querySnap.empty) return null;
       const firstDoc = querySnap.docs[0];
@@ -118,7 +118,7 @@ export const db = {
 
   getUserByResetToken: async (token: string): Promise<any | null> => {
     try {
-      const q = query(collection(firestore, "users"), where("reset_token", "==", token));
+      const q = query(collection(firestore, "users"), where("reset_token", "==", token), limit(1));
       const querySnap = await getDocs(q);
       if (querySnap.empty) return null;
       const firstDoc = querySnap.docs[0];
@@ -131,7 +131,7 @@ export const db = {
 
   getUserByStripeCustomerId: async (customerId: string): Promise<any | null> => {
     try {
-      const q = query(collection(firestore, "users"), where("stripe_customer_id", "==", customerId));
+      const q = query(collection(firestore, "users"), where("stripe_customer_id", "==", customerId), limit(1));
       const querySnap = await getDocs(q);
       if (querySnap.empty) return null;
       const firstDoc = querySnap.docs[0];
@@ -205,28 +205,43 @@ export const db = {
     }
   },
 
+  
   deleteSessionsByUserId: async (userId: string): Promise<void> => {
     try {
       const q = query(collection(firestore, "sessions"), where("user_id", "==", userId));
       const querySnap = await getDocs(q);
-      for (const d of querySnap.docs) {
-        await deleteDoc(doc(firestore, "sessions", d.id));
+      if (!querySnap.empty) {
+        const batch = writeBatch(firestore);
+        for (const d of querySnap.docs) {
+          batch.delete(doc(firestore, "sessions", d.id));
+        }
+        await batch.commit();
       }
     } catch (err) {
+
       console.error("Firestore error in deleteSessionsByUserId:", err);
       throw err;
     }
   },
 
   // --- JOURNALS Operations ---
-  getJournalsByUserId: async (userId: string): Promise<any[]> => {
+  
+  getJournalsByUserId: async (userId: string, limitCount: number = 100): Promise<any[]> => {
     try {
-      const q = query(collection(firestore, "journals"), where("user_id", "==", userId));
+      // Create a query against the collection. 
+      // Ordered by date descending. An index might be required on (user_id, date DESC).
+      // If the index doesn't exist, this will throw an error with a link to create it.
+      const q = query(
+        collection(firestore, "journals"), 
+        where("user_id", "==", userId),
+        orderBy("date", "desc"),
+        limit(limitCount)
+      );
       const querySnap = await getDocs(q);
       const list = querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
       return list;
     } catch (err) {
+
       console.error("Firestore error in getJournalsByUserId:", err);
       throw err;
     }
@@ -271,97 +286,128 @@ export const db = {
     }
   },
 
-  // --- GOALS Operations ---
+  
+  // --- METADATA Operations (Goals, Habits, Badges) ---
+  getUserMetadata: async (userId: string): Promise<any> => {
+    try {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+
+      // Migration: fetch from old collections
+      const batch = writeBatch(firestore);
+      const goalsSnap = await getDocs(query(collection(firestore, "goals"), where("user_id", "==", userId)));
+      const habitsSnap = await getDocs(query(collection(firestore, "habits"), where("user_id", "==", userId)));
+      const badgesSnap = await getDocs(query(collection(firestore, "badges"), where("user_id", "==", userId)));
+
+      const goals = goalsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const habits = habitsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const badges = badgesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const metadata = { goals, habits, badges };
+      batch.set(docRef, metadata);
+      
+      goalsSnap.docs.forEach(d => batch.delete(d.ref));
+      habitsSnap.docs.forEach(d => batch.delete(d.ref));
+      badgesSnap.docs.forEach(d => batch.delete(d.ref));
+      
+      await batch.commit();
+      return metadata;
+    } catch (err) {
+      console.error("Firestore error in getUserMetadata:", err);
+      throw err;
+    }
+  },
+
   getGoalsByUserId: async (userId: string): Promise<any[]> => {
-    try {
-      const q = query(collection(firestore, "goals"), where("user_id", "==", userId));
-      const querySnap = await getDocs(q);
-      return querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      console.error("Firestore error in getGoalsByUserId:", err);
-      throw err;
-    }
+    const meta = await db.getUserMetadata(userId);
+    return meta.goals || [];
+  },
+  saveGoal: async (userId: string, goal: any): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      const data = docSnap.exists() ? docSnap.data() : { goals: [], habits: [], badges: [] };
+      const goals = data.goals || [];
+      const idx = goals.findIndex((g: any) => g.id === goal.id);
+      if (idx >= 0) goals[idx] = { ...goals[idx], ...goal };
+      else goals.push(goal);
+      transaction.set(docRef, { ...data, goals });
+    });
+  },
+  deleteGoal: async (userId: string, id: string): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      if (!data.goals) return;
+      transaction.update(docRef, { goals: data.goals.filter((g: any) => g.id !== id) });
+    });
   },
 
-  saveGoal: async (goal: any): Promise<void> => {
-    try {
-      await setDoc(doc(firestore, "goals", goal.id), goal, { merge: true });
-    } catch (err) {
-      console.error("Firestore error in saveGoal:", err);
-      throw err;
-    }
-  },
-
-  deleteGoal: async (id: string): Promise<void> => {
-    try {
-      await deleteDoc(doc(firestore, "goals", id));
-    } catch (err) {
-      console.error("Firestore error in deleteGoal:", err);
-      throw err;
-    }
-  },
-
-  // --- HABITS Operations ---
   getHabitsByUserId: async (userId: string): Promise<any[]> => {
-    try {
-      const q = query(collection(firestore, "habits"), where("user_id", "==", userId));
-      const querySnap = await getDocs(q);
-      return querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      console.error("Firestore error in getHabitsByUserId:", err);
-      throw err;
-    }
+    const meta = await db.getUserMetadata(userId);
+    return meta.habits || [];
+  },
+  saveHabit: async (userId: string, habit: any): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      const data = docSnap.exists() ? docSnap.data() : { goals: [], habits: [], badges: [] };
+      const habits = data.habits || [];
+      const idx = habits.findIndex((h: any) => h.id === habit.id);
+      if (idx >= 0) habits[idx] = { ...habits[idx], ...habit };
+      else habits.push(habit);
+      transaction.set(docRef, { ...data, habits });
+    });
+  },
+  deleteHabit: async (userId: string, id: string): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      if (!data.habits) return;
+      transaction.update(docRef, { habits: data.habits.filter((h: any) => h.id !== id) });
+    });
   },
 
-  saveHabit: async (habit: any): Promise<void> => {
-    try {
-      await setDoc(doc(firestore, "habits", habit.id), habit, { merge: true });
-    } catch (err) {
-      console.error("Firestore error in saveHabit:", err);
-      throw err;
-    }
-  },
-
-  deleteHabit: async (id: string): Promise<void> => {
-    try {
-      await deleteDoc(doc(firestore, "habits", id));
-    } catch (err) {
-      console.error("Firestore error in deleteHabit:", err);
-      throw err;
-    }
-  },
-
-  // --- BADGES Operations ---
   getBadgesByUserId: async (userId: string): Promise<any[]> => {
-    try {
-      const q = query(collection(firestore, "badges"), where("user_id", "==", userId));
-      const querySnap = await getDocs(q);
-      return querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      console.error("Firestore error in getBadgesByUserId:", err);
-      throw err;
-    }
+    const meta = await db.getUserMetadata(userId);
+    return meta.badges || [];
   },
-
-  saveBadge: async (badge: any): Promise<void> => {
-    try {
-      await setDoc(doc(firestore, "badges", badge.id), badge, { merge: true });
-    } catch (err) {
-      console.error("Firestore error in saveBadge:", err);
-      throw err;
-    }
+  saveBadge: async (userId: string, badge: any): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      const data = docSnap.exists() ? docSnap.data() : { goals: [], habits: [], badges: [] };
+      const badges = data.badges || [];
+      const idx = badges.findIndex((b: any) => b.id === badge.id);
+      if (idx >= 0) badges[idx] = { ...badges[idx], ...badge };
+      else badges.push(badge);
+      transaction.set(docRef, { ...data, badges });
+    });
   },
-
-  updateBadge: async (id: string, updates: any): Promise<void> => {
-    try {
-      await updateDoc(doc(firestore, "badges", id), updates);
-    } catch (err) {
-      console.error("Firestore error in updateBadge:", err);
-      throw err;
-    }
+  updateBadge: async (userId: string, id: string, updates: any): Promise<void> => {
+    await runTransaction(firestore, async (transaction) => {
+      const docRef = doc(firestore, "user_metadata", userId);
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      const badges = data.badges || [];
+      const idx = badges.findIndex((b: any) => b.id === id);
+      if (idx >= 0) {
+        badges[idx] = { ...badges[idx], ...updates };
+        transaction.update(docRef, { badges });
+      }
+    });
   },
 
   // --- VOICE RECORDINGS Operations ---
+
   getRecordingById: async (id: string): Promise<any | null> => {
     try {
       const docSnap = await getDoc(doc(firestore, "voice_recordings", id));

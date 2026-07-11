@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useDeferredValue } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Calendar, Clock, Smile, Trash2, Edit3, Volume2, Share2, FileText, ChevronLeft, ArrowLeftRight, Sparkles, AlertCircle, List, CheckSquare, Mic, Image, Play, Square, Edit, Edit2, Plus, ChevronUp, ChevronDown, Compass, BookOpen, Copy, Check, X, PenTool } from 'lucide-react';
 import { JournalEntry } from '../types';
@@ -49,6 +49,7 @@ interface JournalTimelineProps {
   onSelectEntry?: (entry: JournalEntry | null) => void;
   onUpdateControls?: (controls: any) => void;
   onViewOnCalendar?: (date: Date) => void;
+  cardBorderRadius?: '12px' | '24px' | '48px';
 }
 
 export default function JournalTimeline({ 
@@ -61,9 +62,11 @@ export default function JournalTimeline({
   selectedEntry: propSelectedEntry,
   onSelectEntry: propOnSelectEntry,
   onUpdateControls,
-  onViewOnCalendar
+  onViewOnCalendar,
+  cardBorderRadius = '24px'
 }: JournalTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [filterType, setFilterType] = useState<'All' | 'Today' | 'Week' | 'Month' | 'Year'>('All');
   const [localSelectedEntry, setLocalSelectedEntry] = useState<JournalEntry | null>(null);
 
@@ -108,6 +111,7 @@ export default function JournalTimeline({
   const lastLoadedEntryIdRef = useRef<string | null>(null);
   const [slashCommandBlockId, setSlashCommandBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(15);
   const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -678,15 +682,17 @@ export default function JournalTimeline({
     }
   };
 
+
+
   // Filtering function
   const filteredEntries = entries.filter(entry => {
     // Search filter
     const matchesSearch = 
-      entry.transcript.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.mood.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.topics.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      entry.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      entry.transcript.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      entry.summary.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      entry.mood.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      entry.topics.some(t => t.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
+      entry.tags.some(t => t.toLowerCase().includes(deferredSearchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
 
@@ -949,7 +955,7 @@ export default function JournalTimeline({
                 </div>
               ) : (
                 <div className="relative pl-4 border-l-2 border-cozy-text-dark space-y-6">
-                  {filteredEntries.map((entry, idx) => (
+                  {filteredEntries.slice(0, visibleCount).map((entry, idx) => (
                     <motion.div
                       key={entry.id}
                       initial={{ opacity: 0, y: 15 }}
@@ -964,7 +970,8 @@ export default function JournalTimeline({
                         setSelectedEntry(entry);
                         setEditedText(entry.transcript);
                       }}
-                      className="group relative bg-cozy-card hover:bg-white border-2 border-cozy-text-dark p-4 rounded-xl cursor-pointer shadow-sm transition duration-200"
+                      className="group relative bg-cozy-card hover:bg-white border-2 border-cozy-text-dark p-4 cursor-pointer shadow-sm transition duration-200"
+                      style={{ borderRadius: cardBorderRadius }}
                     >
                       {/* Timeline Dot */}
                       <div className="absolute -left-[23px] top-4 w-3.5 h-3.5 rounded-full bg-cozy-orange border-2 border-cozy-text-dark group-hover:scale-125 transition" />

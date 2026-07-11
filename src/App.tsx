@@ -33,15 +33,17 @@ import {
 } from 'lucide-react';
 
 import { JournalEntry, Goal, Habit, Badge } from './types';
-import Onboarding from './components/Onboarding';
-import Auth from './components/Auth';
-import RecordingScreen from './components/RecordingScreen';
-import JournalTimeline from './components/JournalTimeline';
-import MoodAnalytics from './components/MoodAnalytics';
-import AiCoach from './components/AiCoach';
-import ProfilePage from './components/ProfilePage';
-import RealTimeDashboard from './components/RealTimeDashboard';
-import JournalToolsPanel from './components/JournalToolsPanel';
+
+const Onboarding = React.lazy(() => import('./components/Onboarding'));
+const Auth = React.lazy(() => import('./components/Auth'));
+const RecordingScreen = React.lazy(() => import('./components/RecordingScreen'));
+const JournalTimeline = React.lazy(() => import('./components/JournalTimeline'));
+const MoodAnalytics = React.lazy(() => import('./components/MoodAnalytics'));
+const AiCoach = React.lazy(() => import('./components/AiCoach'));
+const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
+const RealTimeDashboard = React.lazy(() => import('./components/RealTimeDashboard'));
+const JournalToolsPanel = React.lazy(() => import('./components/JournalToolsPanel'));
+
 import { DopamineNotificationProvider, useDopamine } from './context/DopamineNotificationContext';
 import { DopamineToastsStack, DopamineLogPanel } from './components/AddictiveNotificationSystem';
 
@@ -246,6 +248,129 @@ function AppContent() {
   const { addNotification, unreadCount, triggerConfetti, requestNativePermission, nativeNotificationStatus } = useDopamine();
   const [isDopamineOpen, setIsDopamineOpen] = useState(false);
 
+  // Offline & Sync States
+  const [isOnline, setIsOnline] = useState(typeof window !== "undefined" ? window.navigator.onLine : true);
+  const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
+    try {
+      const q = localStorage.getItem("voice_journal_offline_queue");
+      return q ? JSON.parse(q) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Track online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      addNotification("Signal Restored 📶", "Back online! Synchronizing your offline journal reflections with the cloud...", "⚡", "coin", 10);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      addNotification("Offline Nest 📴", "You are now offline. Daynest is saving all changes securely in your browser vault.", "📴", "pop", 5);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Sync queue to local storage
+  useEffect(() => {
+    localStorage.setItem("voice_journal_offline_queue", JSON.stringify(offlineQueue));
+  }, [offlineQueue]);
+
+  // Sync engine
+  const processOfflineQueue = async () => {
+    if (offlineQueue.length === 0) return;
+    
+    // Copy queue to process
+    const currentQueue = [...offlineQueue];
+    const failedItems: any[] = [];
+    
+    for (const item of currentQueue) {
+      try {
+        const token = localStorage.getItem("voice_journal_token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        
+        const res = await fetch(item.url, {
+          method: item.method,
+          headers,
+          body: item.body ? JSON.stringify(item.body) : undefined,
+        });
+        
+        if (!res.ok) {
+          console.warn("Queue item failed with server status:", res.status);
+        }
+      } catch (err) {
+        console.error("Queue item execution failed. Re-queueing:", err);
+        failedItems.push(item);
+      }
+    }
+    
+    setOfflineQueue(failedItems);
+    if (failedItems.length === 0) {
+      addNotification("Synchronized! 🌟", "All offline entries, habits, and goals are synced across devices!", "🕊️", "levelup", 20);
+      triggerConfetti("mild");
+      syncFromDatabase();
+    }
+  };
+
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      processOfflineQueue();
+    }
+  }, [isOnline, offlineQueue.length]);
+
+  // Queueable Fetch Helper
+  const queueableFetch = async (url: string, method: "POST" | "PUT" | "DELETE", body?: any, localFallback?: () => void) => {
+    if (!navigator.onLine) {
+      const queueItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        url,
+        method,
+        body,
+        timestamp: Date.now()
+      };
+      setOfflineQueue(prev => [...prev, queueItem]);
+      if (localFallback) localFallback();
+      return { ok: false, offline: true };
+    }
+    
+    try {
+      const token = localStorage.getItem("voice_journal_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      return res;
+    } catch (err) {
+      console.warn(`Fetch to ${url} failed. Queueing offline action.`, err);
+      const queueItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        url,
+        method,
+        body,
+        timestamp: Date.now()
+      };
+      setOfflineQueue(prev => [...prev, queueItem]);
+      if (localFallback) localFallback();
+      return { ok: false, offline: true };
+    }
+  };
+
   // Navigation states
   const [isOnboarded, setIsOnboarded] = useState<boolean>(() => {
     try {
@@ -270,6 +395,11 @@ function AppContent() {
     avatarEmoji?: string;
     bio?: string;
     avatarBg?: string;
+    avatarImageUrl?: string;
+    avatarFrameId?: string;
+    avatarAnimationId?: string;
+    cardBorderStyle?: string;
+    cardBorderRadius?: '12px' | '24px' | '48px';
   } | null>(() => {
     try {
       const savedUser = localStorage.getItem('voice_journal_user');
@@ -284,8 +414,7 @@ function AppContent() {
   const [isWritingMode, setIsWritingMode] = useState(false); // voice vs typing toggle
   const [autoSelectEntryId, setAutoSelectEntryId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
-  const timelineControlsRef = useRef<any>(null);
+    const timelineControlsRef = useRef<any>(null);
   const setTimelineControls = (val: any) => {
     timelineControlsRef.current = val;
   };
@@ -296,7 +425,7 @@ function AppContent() {
 
   useEffect(() => {
     if (currentTab !== 'timeline') {
-      setSelectedEntry(null);
+      setAutoSelectEntryId(null);
       setTimelineControls(null);
     }
   }, [currentTab]);
@@ -328,39 +457,50 @@ function AppContent() {
   const [loadingData, setLoadingData] = useState<boolean>(true);
 
   // Sync from Database Helper
+  
   const syncFromDatabase = async () => {
     try {
-      const [entriesRes, goalsRes, habitsRes, badgesRes] = await Promise.all([
+      const cachedEntries = sessionStorage.getItem('cozy_entries');
+      if (cachedEntries) setEntries(JSON.parse(cachedEntries));
+      const cachedGoals = sessionStorage.getItem('cozy_goals');
+      if (cachedGoals) setGoals(JSON.parse(cachedGoals));
+      
+      const cachedHabits = sessionStorage.getItem('cozy_habits');
+      if (cachedHabits) setHabits(JSON.parse(cachedHabits));
+      const cachedBadges = sessionStorage.getItem('cozy_badges');
+      if (cachedBadges) setBadges(JSON.parse(cachedBadges));
+
+      const [entriesRes, metadataRes] = await Promise.all([
         fetch("/api/journals"),
-        fetch("/api/goals"),
-        fetch("/api/habits"),
-        fetch("/api/badges")
+        fetch("/api/metadata")
       ]);
 
       if (entriesRes.ok) {
         const dbEntries = await entriesRes.json();
         if (dbEntries && dbEntries.length > 0) {
           setEntries(dbEntries);
+          try { sessionStorage.setItem('cozy_entries', JSON.stringify(dbEntries)); } catch (e) {}
         }
       }
-      if (goalsRes.ok) {
-        const dbGoals = await goalsRes.json();
-        if (dbGoals && dbGoals.length > 0) {
-          setGoals(dbGoals);
+      
+      if (metadataRes.ok) {
+        const dbMeta = await metadataRes.json();
+        
+        if (dbMeta.goals && dbMeta.goals.length > 0) {
+          setGoals(dbMeta.goals);
+          try { sessionStorage.setItem('cozy_goals', JSON.stringify(dbMeta.goals)); } catch (e) {}
+        }
+        if (dbMeta.habits && dbMeta.habits.length > 0) {
+          setHabits(dbMeta.habits);
+          try { sessionStorage.setItem('cozy_habits', JSON.stringify(dbMeta.habits)); } catch (e) {}
+        }
+        if (dbMeta.badges && dbMeta.badges.length > 0) {
+          setBadges(dbMeta.badges);
+          try { sessionStorage.setItem('cozy_badges', JSON.stringify(dbMeta.badges)); } catch (e) {}
         }
       }
-      if (habitsRes.ok) {
-        const dbHabits = await habitsRes.json();
-        if (dbHabits && dbHabits.length > 0) {
-          setHabits(dbHabits);
-        }
-      }
-      if (badgesRes.ok) {
-        const dbBadges = await badgesRes.json();
-        if (dbBadges && dbBadges.length > 0) {
-          setBadges(dbBadges);
-        }
-      }
+
+      
     } catch (err) {
       console.error("Failed to sync client data structures with secure database:", err);
     }
@@ -369,6 +509,10 @@ function AppContent() {
   // Perform persistent session identification check
   const identifySecureSession = async () => {
     try {
+      setEntries([]);
+      setGoals([]);
+      setHabits([]);
+      setBadges([]);
       const res = await fetch("/api/auth/me");
       if (res.ok) {
         const data = await res.json();
@@ -486,7 +630,7 @@ function AppContent() {
         } else if (b.id === 'badge-3') {
           shouldUnlock = goals.some(g => g.progress >= 75);
         } else if (b.id === 'badge-4') {
-          const medHabit = habits.find(h => h.name.toLowerCase().includes('meditation') || h.name.toLowerCase().includes('zen'));
+          const medHabit = habits.find(h => h?.name?.toLowerCase().includes('meditation') || h?.name?.toLowerCase().includes('zen'));
           shouldUnlock = medHabit ? medHabit.streak >= 5 : false;
         } else if (b.id === 'badge-5') {
           shouldUnlock = entries.length > 0 || goals.length > 3;
@@ -516,21 +660,20 @@ function AppContent() {
 
   // Handle entry creation
   const handleSaveEntry = async (newEntry: JournalEntry) => {
-    try {
-      const res = await fetch("/api/journals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newEntry)
-      });
-      if (res.ok) {
-        const savedEntry = await res.json();
-        setEntries(prev => [savedEntry, ...prev]);
-      } else {
-        setEntries(prev => [newEntry, ...prev]);
-      }
-    } catch (err) {
-      console.error("Save entry backend failure. Defaulting to state save:", err);
+    const fallback = () => {
       setEntries(prev => [newEntry, ...prev]);
+    };
+    
+    const res = await queueableFetch("/api/journals", "POST", newEntry, fallback);
+    if (res.ok && !(res as any).offline) {
+      try {
+        const savedEntry = await (res as Response).json();
+        setEntries(prev => [savedEntry, ...prev]);
+      } catch (_) {
+        fallback();
+      }
+    } else if (!(res as any).offline) {
+      fallback();
     }
 
     setIsRecordingOverlayActive(false);
@@ -575,23 +718,22 @@ function AppContent() {
       })
     } as any;
 
-    try {
-      const res = await fetch("/api/journals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPage)
-      });
-      if (res.ok) {
-        const saved = await res.json();
+    const fallback = () => {
+      setEntries(prev => [newPage, ...prev]);
+      setAutoSelectEntryId(newPage.id);
+    };
+
+    const res = await queueableFetch("/api/journals", "POST", newPage, fallback);
+    if (res.ok && !(res as any).offline) {
+      try {
+        const saved = await (res as Response).json();
         setEntries(prev => [saved, ...prev]);
         setAutoSelectEntryId(saved.id);
-      } else {
-        setEntries(prev => [newPage, ...prev]);
-        setAutoSelectEntryId(newId);
+      } catch (_) {
+        fallback();
       }
-    } catch (err) {
-      setEntries(prev => [newPage, ...prev]);
-      setAutoSelectEntryId(newId);
+    } else if (!(res as any).offline) {
+      fallback();
     }
 
     setCurrentTab('timeline');
@@ -674,27 +816,23 @@ function AppContent() {
 
   // Goals actions
   const handleAddGoal = async (newGoal: Goal) => {
-    try {
-      await fetch("/api/goals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newGoal)
-      });
-    } catch (err) {
-      console.error("Failed to sync new goal with backend:", err);
-    }
-    setGoals(prev => [newGoal, ...prev]);
+    const fallback = () => {
+      setGoals(prev => [newGoal, ...prev]);
+    };
+    
+    await queueableFetch("/api/goals", "POST", newGoal, fallback);
+    fallback();
     addNotification("Vision Crystalized 🎯", `New Goal set: "${newGoal.title}"! Focus is the precursor to mastery.`, "🏆", "badge", 25);
     triggerConfetti("mild");
   };
 
   const handleDeleteGoal = async (id: string) => {
-    try {
-      await fetch(`/api/goals/${id}`, { method: "DELETE" });
-    } catch (err) {
-      console.error("Failed to delete goal from backend:", err);
-    }
-    setGoals(prev => prev.filter(g => g.id !== id));
+    const fallback = () => {
+      setGoals(prev => prev.filter(g => g.id !== id));
+    };
+    
+    await queueableFetch(`/api/goals/${id}`, "DELETE", undefined, fallback);
+    fallback();
   };
 
   // Habits actions
@@ -723,12 +861,10 @@ function AppContent() {
             history: newHistory
           };
 
-          // Sync updated habit record to server database
-          fetch("/api/habits", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedHabit)
-          }).catch(err => console.error("Sync habit status failure:", err));
+          // Sync updated habit record to server database with queueable fallback
+          queueableFetch("/api/habits", "POST", updatedHabit).catch(err => 
+            console.error("Sync habit status failure:", err)
+          );
 
           return updatedHabit;
         }
@@ -746,80 +882,84 @@ function AppContent() {
       history: {}
     };
 
-    try {
-      await fetch("/api/habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newHabit)
-      });
-    } catch (err) {
-      console.error("Failed to sync added habit:", err);
-    }
+    const fallback = () => {
+      setHabits(prev => [...prev, newHabit]);
+    };
 
-    setHabits(prev => [...prev, newHabit]);
+    await queueableFetch("/api/habits", "POST", newHabit, fallback);
+    fallback();
     addNotification("New Path Set! 🧭", `Cultivating habit: "${name}". Big journeys start with tiny steps.`, "🌱", "pop", 10);
   };
 
   const handleDeleteEntry = async (entryId: string) => {
-    try {
-      await fetch(`/api/journals/${entryId}`, { method: "DELETE" });
-    } catch (err) {
-      console.error("Failed to delete entry on server:", err);
-    }
-    setEntries(prev => prev.filter(e => e.id !== entryId));
+    const fallback = () => {
+      setEntries(prev => prev.filter(e => e.id !== entryId));
+    };
+    
+    await queueableFetch(`/api/journals/${entryId}`, "DELETE", undefined, fallback);
+    fallback();
   };
 
   const handleUpdateEntry = async (updatedEntry: JournalEntry) => {
-    try {
-      await fetch(`/api/journals/${updatedEntry.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedEntry)
-      });
-    } catch (err) {
-      console.error("Failed to update entry on server:", err);
-    }
-    setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
+    const fallback = () => {
+      setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
+    };
+    
+    await queueableFetch(`/api/journals/${updatedEntry.id}`, "PUT", updatedEntry, fallback);
+    fallback();
   };
 
   // Navigation router
   if (!isOnboarded) {
     return (
-      <Onboarding 
+      <React.Suspense fallback={<div className="w-full min-h-screen flex flex-col justify-center items-center bg-cozy-bg"><Sparkles size={32} className="text-cozy-accent animate-spin mb-3" /><p className="text-cozy-text-dark font-black text-sm">Loading...</p></div>}>
+        <Onboarding 
         onComplete={() => setIsOnboarded(true)} 
         onGoToLogin={() => {
           setIsOnboarded(true);
         }}
       />
+      </React.Suspense>
     );
   }
 
   // If verifying session on startup, display a comforting loading screen
   if (loadingData) {
     return (
-      <div className="w-full min-h-screen flex flex-col justify-center items-center bg-cozy-bg">
+      <div className="w-full min-h-screen flex flex-col justify-center items-center bg-cozy-bg text-cozy-text-dark" id="loading-screen">
         <Sparkles size={32} className="text-cozy-accent animate-spin mb-3" />
-        <p className="text-cozy-text-dark font-black text-sm">Synchronizing your Daynest...</p>
+        <p className="font-black text-sm">Verifying secure session...</p>
       </div>
     );
   }
 
+  // If user is not authenticated, show the authentication screen
   if (!user) {
     return (
-      <Auth 
-        onSuccess={(id, name, email, role, subscription_status) => {
-          setUser({
-            id,
-            name,
-            email,
-            streak: 27,
-            isPremium: subscription_status === 'premium'
-          });
-          syncFromDatabase();
-          setCurrentTab('home');
-        }}
-        onBackToOnboarding={() => setIsOnboarded(false)}
-      />
+      <React.Suspense fallback={
+        <div className="w-full min-h-screen flex flex-col justify-center items-center bg-cozy-bg" id="auth-loading-screen">
+          <Sparkles size={32} className="text-cozy-accent animate-spin mb-3" />
+          <p className="text-cozy-text-dark font-black text-sm">Loading Authentication...</p>
+        </div>
+      }>
+        <Auth 
+          onSuccess={(id, name, email, role, subscription_status) => {
+            const updatedUser = {
+              id,
+              name,
+              email,
+              streak: 27,
+              isPremium: subscription_status === "premium",
+              avatarBg: "bg-cozy-orange",
+              avatarEmoji: "🐾",
+            };
+            setUser(updatedUser);
+            localStorage.setItem('voice_journal_user', JSON.stringify(updatedUser));
+            syncFromDatabase();
+          }}
+          onBackToOnboarding={() => setIsOnboarded(false)}
+        />
+      </React.Suspense>
     );
   }
 
@@ -997,20 +1137,6 @@ function AppContent() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Dopamine Ringing Bell */}
-          <button 
-            onClick={() => setIsDopamineOpen(true)}
-            className="w-10 h-10 bg-white hover:bg-[#FAF6EB] rounded-xl border-2 border-cozy-text-dark cursor-pointer flex items-center justify-center relative shadow-sm hover:scale-105 active:scale-95 transition"
-            title="Dopamine Hub"
-          >
-            <Bell size={18} strokeWidth={3} className={`text-cozy-text-dark ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-cozy-orange text-white text-[9px] font-black w-5.5 h-5.5 rounded-full border-2 border-cozy-text-dark flex items-center justify-center shadow-sm">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
           {/* Three-lined menu button with settings, notifications, and navigation shortcuts */}
           <div className="relative">
             <button 
@@ -1038,11 +1164,11 @@ function AppContent() {
                     className="absolute right-0 mt-2.5 w-60 bg-white border-2 border-cozy-text-dark rounded-2xl shadow-lg z-50 p-3 flex flex-col gap-1.5"
                   >
                     <div className="px-2.5 py-1.5 border-b border-cozy-text-dark/10 flex items-center gap-2.5 mb-1">
-                      <div className={`w-8 h-8 rounded-lg ${user.avatarBg || "bg-cozy-orange"} border-2 border-cozy-text-dark flex items-center justify-center text-xs font-black text-white`}>
-                        {user.avatarEmoji || user.name.charAt(0).toUpperCase()}
+                      <div className={`w-8 h-8 rounded-lg ${(user && user.avatarBg) || "bg-cozy-orange"} border-2 border-cozy-text-dark flex items-center justify-center text-xs font-black text-white`}>
+                        {(user && user.avatarEmoji) || (user && user.name && user.name.charAt(0).toUpperCase()) || "👤"}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[11px] font-black text-cozy-text-dark truncate leading-tight">{user.name}</span>
+                        <span className="text-[11px] font-black text-cozy-text-dark truncate leading-tight">{(user && user.name) || "Cozy User"}</span>
                         <span className="text-[9px] text-cozy-text-muted font-bold truncate leading-tight">Cozy Companion</span>
                       </div>
                     </div>
@@ -1063,35 +1189,6 @@ function AppContent() {
                         <p className="text-[8px] text-cozy-text-muted font-bold leading-none mt-0.5">Customize profile & billing</p>
                       </div>
                     </button>
-
-                     {/* Device Notifications Button */}
-                    <button
-                      onClick={async () => {
-                        setIsHeaderMenuOpen(false);
-                        await requestNativePermission();
-                      }}
-                      className="flex items-center gap-3 px-2.5 py-2 hover:bg-[#FFFCEB] rounded-xl text-left cursor-pointer transition text-xs font-black text-cozy-text-dark"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-cozy-orange/20 border border-cozy-text-dark/10 flex items-center justify-center text-cozy-orange">
-                        <Bell size={14} strokeWidth={2.5} />
-                      </div>
-                      <div className="flex-1 flex items-center justify-between gap-1">
-                        <div>
-                          <p className="leading-tight">Device Notifications</p>
-                          <p className="text-[8px] text-cozy-text-muted font-bold leading-none mt-0.5">
-                            {nativeNotificationStatus === 'granted' ? 'Allowed on this device' : 'Click to enable device alerts'}
-                          </p>
-                        </div>
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border shadow-sm shrink-0 uppercase ${
-                          nativeNotificationStatus === 'granted' 
-                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                            : 'bg-cozy-orange/10 text-cozy-orange border-cozy-orange/20'
-                        }`}>
-                          {nativeNotificationStatus === 'granted' ? 'Active' : 'Enable'}
-                        </span>
-                      </div>
-                    </button>
-
                     {/* Divider */}
                     <div className="h-[1px] bg-cozy-text-dark/10 my-1" />
 
@@ -1192,7 +1289,7 @@ function AppContent() {
               <div className="bg-cozy-card rounded-2xl p-5 border-2 border-cozy-text-dark shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-cozy-yellow/10 rounded-full blur-xl" />
                 <h3 className="text-cozy-text-muted text-[10px] font-black uppercase tracking-wider mb-2">
-                  Good Day, {user.name.split(' ')[0]} 👋
+                  Good Day, {(user && user.name) ? user.name.split(' ')[0] : "Companion"} 👋
                 </h3>
                 <p className="text-xs text-cozy-text-dark italic leading-relaxed font-semibold">
                   "Every thought you speak is an elegant piece of your personal growth story."
@@ -1364,9 +1461,10 @@ function AppContent() {
                 transition={{ type: "spring", stiffness: 100, damping: 15 }}
                 className="flex-1"
               >
+                <React.Suspense fallback={<div className="w-full h-full flex flex-col justify-center items-center py-20"><Sparkles size={32} className="text-cozy-accent animate-spin mb-3" /><p className="text-cozy-text-dark font-black text-sm">Loading Tab...</p></div>}>
                 {currentTab === 'home' && (
                   <RealTimeDashboard
-                    userName={user.name}
+                    userName={user?.name || ""}
                     isWritingMode={isWritingMode}
                     setIsWritingMode={setIsWritingMode}
                     onStartRecording={() => {
@@ -1392,13 +1490,12 @@ function AppContent() {
                     autoSelectEntryId={autoSelectEntryId}
                     onClearAutoSelect={() => setAutoSelectEntryId(null)}
                     onCreateEntry={handleCreateJournalPage}
-                    selectedEntry={selectedEntry}
-                    onSelectEntry={setSelectedEntry}
-                    onUpdateControls={setTimelineControls}
+                                                            onUpdateControls={setTimelineControls}
                     onViewOnCalendar={(date) => {
                       setCalendarTargetDate(date);
                       setCurrentTab('analytics');
                     }}
+                    cardBorderRadius={user?.cardBorderRadius || '24px'}
                   />
                 )}
 
@@ -1413,7 +1510,7 @@ function AppContent() {
                     onNavigateToEntry={(id) => {
                       const matched = entries.find(e => e.id === id);
                       if (matched) {
-                        setSelectedEntry(matched);
+                        setAutoSelectEntryId(matched.id);
                         setAutoSelectEntryId(id);
                         setCurrentTab('timeline');
                       }
@@ -1423,7 +1520,7 @@ function AppContent() {
                     }}
                     onSaveConvertedEntry={(newPage) => {
                       setEntries(prev => [newPage, ...prev]);
-                      setSelectedEntry(newPage);
+                      setAutoSelectEntryId(newPage.id);
                       setAutoSelectEntryId(newPage.id);
                       setCurrentTab('timeline');
                     }}
@@ -1440,7 +1537,7 @@ function AppContent() {
                     onNavigateToEntry={(id) => {
                       const matched = entries.find(e => e.id === id);
                       if (matched) {
-                        setSelectedEntry(matched);
+                        setAutoSelectEntryId(matched.id);
                         setAutoSelectEntryId(id);
                         setCurrentTab('timeline');
                       }
@@ -1453,16 +1550,21 @@ function AppContent() {
 
                  {currentTab === 'profile' && (
                   <ProfilePage 
-                    userName={user.name}
-                    userEmail={user.email}
-                    userAvatar={user.avatarEmoji}
-                    userBio={user.bio}
-                    userAvatarBg={user.avatarBg}
-                    isPremium={user.isPremium}
-                    subscriptionPlan={user.subscriptionPlan}
-                    subscriptionPeriodEnd={user.subscriptionPeriodEnd}
-                    subscriptionCancelAtPeriodEnd={user.subscriptionCancelAtPeriodEnd}
-                    subscriptionTrialEnd={user.subscriptionTrialEnd}
+                    userName={user?.name || ""}
+                    userEmail={user?.email || ""}
+                    userAvatar={user?.avatarEmoji}
+                    userBio={user?.bio}
+                    userAvatarBg={user?.avatarBg}
+                    avatarImageUrl={user?.avatarImageUrl}
+                    avatarFrameId={user?.avatarFrameId}
+                    avatarAnimationId={user?.avatarAnimationId}
+                    cardBorderStyle={user?.cardBorderStyle}
+                    cardBorderRadius={user?.cardBorderRadius}
+                    isPremium={user?.isPremium || false}
+                    subscriptionPlan={user?.subscriptionPlan}
+                    subscriptionPeriodEnd={user?.subscriptionPeriodEnd}
+                    subscriptionCancelAtPeriodEnd={user?.subscriptionCancelAtPeriodEnd}
+                    subscriptionTrialEnd={user?.subscriptionTrialEnd}
                     onTogglePremium={handleTogglePremium}
                     onManageBilling={handleManageBilling}
                     onUpdateProfile={(updates) => {
@@ -1473,8 +1575,10 @@ function AppContent() {
                     goals={goals}
                     habits={habits}
                     onLogout={handleLogout}
+                    onOpenNotificationsLog={() => setIsDopamineOpen(true)}
                   />
                 )}
+              </React.Suspense>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1564,7 +1668,7 @@ function AppContent() {
         </button>
 
       </footer>
-
+      <DopamineLogPanel isOpen={isDopamineOpen} onClose={() => setIsDopamineOpen(false)} />
     </div>
   );
 }

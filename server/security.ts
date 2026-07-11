@@ -37,6 +37,35 @@ export function signSessionToken(payload: { userId: string; sessionId: string })
 /**
  * Verify session cookie and load authenticated user & session
  */
+
+const sessionCache = new Map<string, { data: any; expiry: number }>();
+const userCache = new Map<string, { data: any; expiry: number }>();
+const CACHE_TTL = 60 * 1000; // 1 minute
+
+async function getCachedSession(sessionId: string, userId: string) {
+  const cached = sessionCache.get(sessionId);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.data;
+  }
+  const session = await db.getSession(sessionId, userId);
+  if (session) {
+    sessionCache.set(sessionId, { data: session, expiry: Date.now() + CACHE_TTL });
+  }
+  return session;
+}
+
+async function getCachedUser(userId: string) {
+  const cached = userCache.get(userId);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.data;
+  }
+  const user = await db.getUserById(userId);
+  if (user) {
+    userCache.set(userId, { data: user, expiry: Date.now() + CACHE_TTL });
+  }
+  return user;
+}
+
 export async function authenticateSession(req: SecureRequest, res: Response, next: NextFunction) {
   try {
     const cookies = parseCookies(req.headers.cookie || "");
@@ -64,7 +93,7 @@ export async function authenticateSession(req: SecureRequest, res: Response, nex
     const { userId, sessionId } = decoded;
 
     // Check sessions table to verify device session is active
-    const session = await db.getSession(sessionId, userId);
+    const session = await getCachedSession(sessionId, userId);
     if (!session) {
       return res.status(401).json({ error: "Session has been revoked or expired." });
     }
@@ -76,7 +105,7 @@ export async function authenticateSession(req: SecureRequest, res: Response, nex
     }
 
     // Load user
-    const user = await db.getUserById(userId);
+    const user = await getCachedUser(userId);
     if (!user) {
       return res.status(401).json({ error: "User associated with this session no longer exists." });
     }
@@ -148,7 +177,7 @@ export async function authenticateSessionOptional(req: SecureRequest, res: Respo
 
     const { userId, sessionId } = decoded;
 
-    const session = await db.getSession(sessionId, userId);
+    const session = await getCachedSession(sessionId, userId);
     if (!session) {
       return next();
     }
@@ -157,7 +186,7 @@ export async function authenticateSessionOptional(req: SecureRequest, res: Respo
       return next();
     }
 
-    const user = await db.getUserById(userId);
+    const user = await getCachedUser(userId);
     if (!user) {
       return next();
     }

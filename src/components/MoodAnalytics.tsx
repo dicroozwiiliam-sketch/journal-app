@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Sparkles,
@@ -129,10 +129,10 @@ export default function MoodAnalytics({
   const [newGoalCategory, setNewGoalCategory] = useState<'Personal' | 'Fitness' | 'Reading' | 'Career' | 'Habit'>('Personal');
 
   // Filter entries to only real entries within the visible month
-  const monthlyEntries = entries.filter(e => {
+  const monthlyEntries = useMemo(() => entries.filter(e => {
     const d = new Date(e.date);
     return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-  });
+  }), [entries, selectedMonth, selectedYear]);
 
   // Calculate most frequent emotion
   const emotionCounts: Record<string, number> = {};
@@ -189,7 +189,7 @@ export default function MoodAnalytics({
 
   // Filter active goals due in the visible month
   const targetPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-  const monthlyGoals = (goals || []).filter(g => g.deadline.startsWith(targetPrefix));
+  const monthlyGoals = useMemo(() => (goals || []).filter(g => g.deadline.startsWith(targetPrefix)), [goals, targetPrefix]);
 
   // Reset modal state when the selected date changes
   useEffect(() => {
@@ -761,7 +761,7 @@ export default function MoodAnalytics({
                         {/* Miniature visual track of daily habits */}
                         {cell.isCurrentMonth && habits.length > 0 && (
                           <div className="flex flex-wrap gap-0.5 max-w-[36px] xs:max-w-[48px] sm:max-w-[60px] mt-1 p-0.5 bg-[#4A3D30]/5 rounded-full px-1.5 items-center justify-center" title="Daily Habits Consistency">
-                            {habits.map((habit) => {
+                            {habits.filter(h => h && h.name && h.history).map((habit) => {
                               const yyyy = cell.year;
                               const mm = String(cell.month + 1).padStart(2, '0');
                               const dd = String(cell.day).padStart(2, '0');
@@ -1012,7 +1012,7 @@ export default function MoodAnalytics({
                   <span>Habits Tracked for this Day</span>
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {habits.map((habit) => {
+                  {habits.filter(h => h && h.name && h.history).map((habit) => {
                     const yyyy = selectedDateDetail.year;
                     const mm = String(selectedDateDetail.month + 1).padStart(2, '0');
                     const dd = String(selectedDateDetail.day).padStart(2, '0');

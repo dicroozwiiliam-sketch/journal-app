@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
+import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -11,6 +12,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import dotenv from "dotenv";
 import argon2 from "argon2";
 import crypto from "crypto";
+import * as admin from "firebase-admin";
 
 // Server submodules
 import { db, encryptData, decryptData } from "./server/db";
@@ -32,7 +34,35 @@ import { getStripe, createCheckoutSession, createPortalSession, handleStripeWebh
 
 dotenv.config();
 
+
+// Firebase App Check Middleware
+export const enforceAppCheck = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const appCheckToken = req.header('X-Firebase-AppCheck');
+  if (!appCheckToken) {
+    if (process.env.NODE_ENV !== 'production') {
+       return next(); // bypass in dev if missing
+    }
+    res.status(401).json({ error: "Unauthorized: Missing App Check token." });
+    return;
+  }
+  try {
+    const admin = await import("firebase-admin");
+    // @ts-ignore
+    await (admin.default || admin).appCheck().verifyToken(appCheckToken);
+    next();
+  } catch (err) {
+    console.error("App Check verification failed", err);
+    res.status(401).json({ error: "Unauthorized: Invalid App Check token." });
+  }
+};
+
 const app = express();
+
+// Add compression to reduce bandwidth
+app.use(compression());
+
+app.use("/api", enforceAppCheck);
+
 const PORT = 3000;
 
 // Set up private storage directory for secure voice recordings
@@ -269,7 +299,7 @@ app.post("/api/auth/signup", authRateLimiter, async (req, res, next) => {
       { id: "badge-5", title: "AI Coachee", description: "Had a personalized discussion with the coach.", icon: "🧠" },
     ];
     for (const b of defaultBadges) {
-      await db.saveBadge({
+      await db.saveBadge(userId, {
         id: `${b.id}-${userId}`,
         user_id: userId,
         title: b.title,
@@ -402,13 +432,34 @@ app.post("/api/auth/login", authRateLimiter, async (req, res, next) => {
 // POST Sign In / Sign Up with Google
 app.post("/api/auth/google", authRateLimiter, async (req, res, next) => {
   try {
-    const { email, name, googleUid } = req.body;
+    
+    
+    const { idToken, name, email } = req.body;
 
-    if (!email || !googleUid) {
+    if (!idToken) {
       return res.status(400).json({ error: "Missing required Google auth payload." });
     }
 
-    const sanitizedEmail = email.toLowerCase().trim();
+    let decodedToken;
+    try {
+      // @ts-ignore
+      if (!admin.apps.length) {
+         const configPath = require("path").join(process.cwd(), "firebase-applet-config.json");
+         const firebaseConfig = JSON.parse(require("fs").readFileSync(configPath, "utf-8"));
+         // @ts-ignore
+         admin.initializeApp({ projectId: firebaseConfig.projectId });
+      }
+      // @ts-ignore
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (e) {
+      console.error("Token verification failed", e);
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+
+    const googleUid = decodedToken.uid;
+    const sanitizedEmail = (decodedToken.email || email || "").toLowerCase().trim();
+
+
     let user = await db.getUserByEmail(sanitizedEmail);
 
     if (!user) {
@@ -433,7 +484,7 @@ app.post("/api/auth/google", authRateLimiter, async (req, res, next) => {
         { id: "badge-5", title: "AI Coachee", description: "Had a personalized discussion with the coach.", icon: "🧠" },
       ];
       for (const b of defaultBadges) {
-        await db.saveBadge({
+        await db.saveBadge(userId, {
           id: `${b.id}-${userId}`,
           user_id: userId,
           title: b.title,
@@ -634,9 +685,12 @@ const journalRateLimiter = rateLimiter("journal", {
 });
 
 // GET Journal timeline (retrieves and decrypts user's records)
+
 app.get("/api/journals", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const entries = await db.getJournalsByUserId(req.user!.id);
+    const limit = parseInt(req.query.limit as string) || 30;
+    const entries = await db.getJournalsByUserId(req.user!.id, limit);
+
 
     const decryptedEntries = entries.map((entry) => {
       try {
@@ -1238,16 +1292,17 @@ app.post("/api/ai/insights", authenticateSessionOptional, aiRateLimiter, async (
         }
       }).filter(Boolean);
 
-      // 2. Fetch habits from DB
-      const habitsList = await db.getHabitsByUserId(req.user.id);
+      // Fetch metadata once to save Firebase reads
+      const meta = await db.getUserMetadata(req.user.id);
+      const habitsList = meta.habits || [];
+      const goalsList = meta.goals || [];
+      
       formattedHabits = habitsList.map((h) => ({
         name: h.name,
         streak: h.streak,
         history: JSON.parse(h.history || "{}"),
       }));
 
-      // 3. Fetch goals from DB
-      const goalsList = await db.getGoalsByUserId(req.user.id);
       formattedGoals = goalsList.map((g) => ({
         title: g.title,
         category: g.category,
@@ -1453,23 +1508,49 @@ function generateSimulatedInsights(timeframe: string, entries: any[], habits: an
 // GOALS, HABITS, AND BADGES SECURE ENDPOINTS
 // ─────────────────────────────────────────────────────────────
 
-// GET goals
-app.get("/api/goals", authenticateSession, async (req: SecureRequest, res, next) => {
+
+// GET Unified Metadata (Goals, Habits, Badges)
+app.get("/api/metadata", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    const goalsList = await db.getGoalsByUserId(req.user!.id);
-    const formatted = goalsList.map((g) => ({
+    const meta = await db.getUserMetadata(req.user!.id);
+    
+    // format goals
+    const formattedGoals = (meta.goals || []).map((g: any) => ({
       id: g.id,
       title: g.title,
       category: g.category,
       progress: g.progress,
       deadline: g.deadline,
-      actions: JSON.parse(g.actions || "[]"),
+      actions: g.actions ? JSON.parse(g.actions) : [],
     }));
-    return res.json(formatted);
+
+    // format habits
+    const formattedHabits = (meta.habits || []).map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      frequency: h.frequency,
+      timeOfDay: h.timeOfDay,
+      streak: h.streak,
+    }));
+
+    // format badges
+    const formattedBadges = (meta.badges || []).map((b: any) => ({
+      id: b.id.split("-")[0],
+      title: b.title,
+      description: b.description,
+      icon: b.icon,
+      unlocked: b.unlocked === 1,
+      unlockedAt: b.unlocked_at,
+    }));
+
+    return res.json({ goals: formattedGoals, habits: formattedHabits, badges: formattedBadges });
   } catch (err) {
     next(err);
   }
 });
+
+// GET goals
+
 
 // POST Create/Save goal
 app.post("/api/goals", authenticateSession, async (req: SecureRequest, res, next) => {
@@ -1480,7 +1561,7 @@ app.post("/api/goals", authenticateSession, async (req: SecureRequest, res, next
     }
 
     const goalId = id || crypto.randomUUID();
-    await db.saveGoal({
+    await db.saveGoal(req.user!.id, {
       id: goalId,
       user_id: req.user!.id,
       title: sanitizeHtml(title),
@@ -1499,7 +1580,7 @@ app.post("/api/goals", authenticateSession, async (req: SecureRequest, res, next
 // DELETE Goal
 app.delete("/api/goals/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    await db.deleteGoal(req.params.id);
+    await db.deleteGoal(req.user!.id, req.params.id);
     return res.json({ message: "Goal deleted." });
   } catch (err) {
     next(err);
@@ -1507,20 +1588,7 @@ app.delete("/api/goals/:id", authenticateSession, async (req: SecureRequest, res
 });
 
 // GET Habits
-app.get("/api/habits", authenticateSession, async (req: SecureRequest, res, next) => {
-  try {
-    const habitsList = await db.getHabitsByUserId(req.user!.id);
-    const formatted = habitsList.map((h) => ({
-      id: h.id,
-      name: h.name,
-      streak: h.streak,
-      history: JSON.parse(h.history || "{}"),
-    }));
-    return res.json(formatted);
-  } catch (err) {
-    next(err);
-  }
-});
+
 
 // POST Save Habit
 app.post("/api/habits", authenticateSession, async (req: SecureRequest, res, next) => {
@@ -1529,7 +1597,7 @@ app.post("/api/habits", authenticateSession, async (req: SecureRequest, res, nex
     if (!name) return res.status(400).json({ error: "Habit name required." });
 
     const habitId = id || crypto.randomUUID();
-    await db.saveHabit({
+    await db.saveHabit(req.user!.id, {
       id: habitId,
       user_id: req.user!.id,
       name: sanitizeHtml(name),
@@ -1546,7 +1614,7 @@ app.post("/api/habits", authenticateSession, async (req: SecureRequest, res, nex
 // DELETE Habit
 app.delete("/api/habits/:id", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
-    await db.deleteHabit(req.params.id);
+    await db.deleteHabit(req.user!.id, req.params.id);
     return res.json({ message: "Habit deleted." });
   } catch (err) {
     next(err);
@@ -1554,29 +1622,14 @@ app.delete("/api/habits/:id", authenticateSession, async (req: SecureRequest, re
 });
 
 // GET Badges
-app.get("/api/badges", authenticateSession, async (req: SecureRequest, res, next) => {
-  try {
-    const badgesList = await db.getBadgesByUserId(req.user!.id);
-    const formatted = badgesList.map((b) => ({
-      id: b.id.split("-")[0], // Trim userId mapping
-      title: b.title,
-      description: b.description,
-      icon: b.icon,
-      unlocked: b.unlocked === 1,
-      unlockedAt: b.unlocked_at || undefined,
-    }));
-    return res.json(formatted);
-  } catch (err) {
-    next(err);
-  }
-});
+
 
 // POST unlock badge
 app.post("/api/badges/unlock", authenticateSession, async (req: SecureRequest, res, next) => {
   try {
     const { id } = req.body;
     const mappedId = `${id}-${req.user!.id}`;
-    await db.updateBadge(mappedId, {
+    await db.updateBadge(req.user!.id, mappedId, {
       unlocked: 1,
       unlocked_at: new Date().toISOString().split("T")[0],
     });

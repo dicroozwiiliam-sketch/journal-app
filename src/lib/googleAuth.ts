@@ -1,15 +1,28 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 let app;
 export let auth: any = null;
+export let appCheck: any = null;
 
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
+  
+  if (typeof window !== 'undefined') {
+    // Enable the App Check debug token in local development/preview frames
+    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6Ld_placeholder_site_key_for_app_check'),
+      isTokenAutoRefreshEnabled: true
+    });
+    console.log("Firebase App Check has been successfully enabled with the Debug Provider.");
+  }
 } catch (e) {
-  console.warn("Firebase Auth could not be initialized. Google Sign-in will run in simulation mode.", e);
+  console.warn("Firebase Auth or App Check could not be initialized. Google Sign-in will run in simulation mode.", e);
 }
 
 const provider = new GoogleAuthProvider();

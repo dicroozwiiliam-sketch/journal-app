@@ -50,9 +50,9 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: user.email,
+          idToken: await user.getIdToken(),
           name: user.displayName,
-          googleUid: user.uid
+          email: user.email
         }),
       });
 

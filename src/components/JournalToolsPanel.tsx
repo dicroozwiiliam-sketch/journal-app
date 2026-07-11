@@ -662,6 +662,27 @@ export default function JournalToolsPanel({
               <div className="grid grid-cols-2 gap-1.5">
                 {[
                   { 
+                    type: 'cute-dog', 
+                    label: 'Puppy Stamp', 
+                    icon: '🐶', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'cute-cat', 
+                    label: 'Kitty Stamp', 
+                    icon: '🐱', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'cute-cow', 
+                    label: 'Cute Cow Stamp', 
+                    icon: '🐮', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
                     type: 'sparkles', 
                     label: 'Sparkles', 
                     icon: '✨', 
