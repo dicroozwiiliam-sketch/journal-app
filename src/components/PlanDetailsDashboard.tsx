@@ -493,9 +493,7 @@ export default function PlanDetailsDashboard({
           {/* Delete button */}
           <button
             onClick={() => {
-              if (window.confirm('Are you sure you want to completely delete this Plan?')) {
-                onDelete(plan.id);
-              }
+              onDelete(plan.id);
             }}
             className="p-2 bg-white text-red-500 border-2 border-cozy-text-dark rounded-xl cursor-pointer tactile-btn-retro hover:bg-red-50"
             title="Delete Plan"

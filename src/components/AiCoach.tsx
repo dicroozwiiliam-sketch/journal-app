@@ -417,11 +417,25 @@ export default function AiCoach({
     }
   };
 
-  const handleDeletePlan = (planId: string) => {
+  const handleDeletePlan = async (planId: string) => {
     // 1. Delete legacy Goals
-    setGoals(prev => prev.filter(g => g.id !== planId));
+    if (goals.some(g => g.id === planId)) {
+      try {
+        const token = document.cookie.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1];
+        if (token) await fetch(`/api/goals/${planId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      } catch (e) {}
+      setGoals(prev => prev.filter(g => g.id !== planId));
+    }
+    
     // 2. Delete legacy Habits
-    setHabits(prev => prev.filter(h => h.id !== planId));
+    if (habits.some(h => h.id === planId)) {
+      try {
+        const token = document.cookie.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1];
+        if (token) await fetch(`/api/habits/${planId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      } catch (e) {}
+      setHabits(prev => prev.filter(h => h.id !== planId));
+    }
+
     // 3. Delete custom modular plan
     setCustomPlans(prev => prev.filter(p => p.id !== planId));
 
@@ -951,9 +965,7 @@ export default function AiCoach({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
-                                  handleDeletePlan(plan.id);
-                                }
+                                handleDeletePlan(plan.id);
                               }}
                               className="p-1 rounded-lg border-2 border-cozy-text-dark bg-white hover:bg-red-50 text-red-500 transition-all shadow-xs hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
                               title="Delete Plan"
@@ -1067,9 +1079,7 @@ export default function AiCoach({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
-                              handleDeletePlan(plan.id);
-                            }
+                            handleDeletePlan(plan.id);
                           }}
                           className="p-1 rounded-lg border-2 border-cozy-text-dark bg-white hover:bg-red-50 text-red-500 transition-all shadow-xs hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
                           title="Delete Plan"
@@ -1139,9 +1149,7 @@ export default function AiCoach({
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
-                                          handleDeletePlan(plan.id);
-                                        }
+                                        handleDeletePlan(plan.id);
                                       }}
                                       className="p-1 rounded bg-white hover:bg-red-50 text-red-500 transition-all border border-cozy-text-dark/20 hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
                                       title="Delete Plan"

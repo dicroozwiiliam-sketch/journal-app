@@ -772,9 +772,7 @@ export default function JournalToolsPanel({
         <span className="text-[10px] font-bold text-cozy-text-muted">{floatingObjects.length} scrap items</span>
         <button
           onClick={() => {
-            if (confirm("Are you sure you want to clear all decorations from this page?")) {
-              canvasActions?.clearAll();
-            }
+            canvasActions?.clearAll();
           }}
           className="text-[10px] font-black text-rose-500 hover:text-rose-600 tracking-wider hover:underline uppercase cursor-pointer"
         >

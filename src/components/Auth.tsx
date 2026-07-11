@@ -56,7 +56,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Backend exchange failed.");
       }
@@ -98,7 +98,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Login failed.");
       }
@@ -136,7 +136,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Registration failed.");
       }
@@ -169,7 +169,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         body: JSON.stringify({ token: verificationToken }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Email verification failed.");
       }
@@ -206,7 +206,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         body: JSON.stringify({ email }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Reset request failed.");
       }
@@ -242,7 +242,7 @@ export default function Auth({ onSuccess, onBackToOnboarding }: AuthProps) {
         body: JSON.stringify({ token: resetToken, newPassword }),
       });
 
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch (e) { throw new Error("Backend server is not running (e.g. static Vercel deployment). Cannot process login."); }
       if (!res.ok) {
         throw new Error(data.error || "Failed to reset password.");
       }
