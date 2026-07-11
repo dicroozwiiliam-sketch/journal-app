@@ -80,6 +80,17 @@ export const DopamineNotificationProvider: React.FC<{ children: React.ReactNode 
     return Notification.permission as 'default' | 'granted' | 'denied';
   });
 
+  // Automatically request device permission on load if default
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          setNativeNotificationStatus(permission as 'default' | 'granted' | 'denied');
+        });
+      }
+    }
+  }, []);
+
   const requestNativePermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return false;

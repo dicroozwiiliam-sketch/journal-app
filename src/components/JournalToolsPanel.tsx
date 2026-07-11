@@ -10,6 +10,7 @@ import {
   Quote, Split, Palette, Clock, BookOpen, PenTool, CheckSquare,
   Undo, Redo, Bold, Italic, Underline, Strikethrough, Link as LinkIcon,
   Paperclip, User, StickyNote, Square, Circle, Triangle, ArrowRight, Star, Heart, Type,
+  Hexagon, Cloud, MessageCircle, Diamond, Flower, Sun, Moon,
   AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 
@@ -512,7 +513,15 @@ export default function JournalToolsPanel({
           <div className="space-y-2">
             <p className="text-[10px] font-bold text-cozy-text-muted uppercase tracking-wider">Tap to Add Floating Emoji</p>
             <div className="grid grid-cols-6 gap-2 bg-[#FDF8F1] p-3 border-2 border-cozy-text-dark rounded-xl max-h-48 overflow-y-auto">
-              {['❤️', '✨', '🌸', '🎉', '🌟', '😊', '🐱', '🥐', '☕', '💡', '🔥', '🎨', '✈️', '🍀', '🍕', '📝', '🧸', '🌈', '🌙', '🌊', '🌲', '🏡', '📚', '🌻', '🍓', '🥑', '🎈', '🎵', '☀️', '☁️'].map(emoji => (
+              {[
+                '❤️', '💖', '💝', '✨', '🌸', '🌼', '🌻', '🌹', '🍀', '🍂', '🍁', '🍄', 
+                '🍓', '🍒', '🍑', '🍋', '🥑', '🥐', '☕', '🍵', '🍪', '🧁', '🍩', '🍕', 
+                '🥞', '🍣', '🍷', '🎈', '🎉', '🌟', '⭐', '🌈', '☀️', '🌙', '☁️', '🌊', 
+                '🌲', '🏡', '🐾', '🐱', '🐶', '🐰', '🧸', '🐣', '🐝', '🦋', '💡', '🔥', 
+                '🎨', '📝', '📚', '🎵', '🎶', '✈️', '📷', '📼', '💌', '🔮', '🧭', '🕯️', 
+                '😊', '🥰', '🥺', '😎', '🥳', '😴', '😭', '🫠', '🤔', '👍', '🙌', '👏', 
+                '🧠', '💪', '🔑', '🎯', '🏆'
+              ].map(emoji => (
                 <button
                   key={emoji}
                   onClick={() => canvasActions?.spawnObject('emoji', { content: emoji, width: 80, height: 80 })}
@@ -550,7 +559,14 @@ export default function JournalToolsPanel({
                 { type: 'triangle', icon: <Triangle size={16} /> },
                 { type: 'arrow', icon: <ArrowRight size={16} /> },
                 { type: 'star', icon: <Star size={16} /> },
-                { type: 'heart', icon: <Heart size={16} /> }
+                { type: 'heart', icon: <Heart size={16} /> },
+                { type: 'hexagon', icon: <Hexagon size={16} /> },
+                { type: 'cloud', icon: <Cloud size={16} /> },
+                { type: 'bubble', icon: <MessageCircle size={16} /> },
+                { type: 'moon', icon: <Moon size={16} /> },
+                { type: 'diamond', icon: <Diamond size={16} /> },
+                { type: 'flower', icon: <Flower size={16} /> },
+                { type: 'sun', icon: <Sun size={16} /> }
               ].map(shape => (
                 <button
                   key={shape.type}
@@ -605,7 +621,7 @@ export default function JournalToolsPanel({
 
         {/* DECO TAB */}
         {activeTab === 'deco' && (
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
             <p className="text-[10px] font-bold text-cozy-text-muted uppercase tracking-wider font-sans">Washi Tapes & Scene Flourishes</p>
             
             {/* Washi Tapes */}
@@ -616,7 +632,12 @@ export default function JournalToolsPanel({
                   { pattern: 'solid', color: '#EF9A7A', label: 'Solid Coral' },
                   { pattern: 'stripes', color: '#96A376', label: 'Olive Stripes' },
                   { pattern: 'dots', color: '#F6D285', label: 'Gold Polka' },
-                  { pattern: 'grid', color: '#88C0D0', label: 'Blue Grid' }
+                  { pattern: 'grid', color: '#88C0D0', label: 'Blue Grid' },
+                  { pattern: 'plaid', color: '#C894B7', label: 'Plaid Berry' },
+                  { pattern: 'vintage', color: '#D4C3A3', label: 'Vintage Kraft' },
+                  { pattern: 'checker', color: '#4A3E31', label: 'Chic Checker' },
+                  { pattern: 'celestial', color: '#647D8E', label: 'Midnight Sky' },
+                  { pattern: 'lace', color: '#E8D2CC', label: 'Lace Cotton' }
                 ].map(t => (
                   <button
                     key={t.label}
@@ -635,21 +656,90 @@ export default function JournalToolsPanel({
               </div>
             </div>
 
-            {/* Sparkles */}
+            {/* Custom Stickers and Stamps */}
             <div className="space-y-1.5">
-              <span className="text-[9px] font-black text-cozy-orange tracking-widest uppercase block">Sparkling Clusters</span>
-              <button
-                onClick={() => canvasActions?.spawnObject('decorative', {
-                  width: 100,
-                  height: 100,
-                  color: '#F6D285',
-                  meta: { decoType: 'sparkles' }
-                })}
-                className="w-full p-2.5 border border-cozy-text-dark/15 rounded-xl text-[9px] font-black flex items-center justify-center gap-1.5 cursor-pointer bg-[#FDF8F1] hover:border-cozy-text-dark text-cozy-text-dark"
-              >
-                <Sparkles size={11} className="text-cozy-yellow animate-bounce" />
-                <span>Magical Sparkles</span>
-              </button>
+              <span className="text-[9px] font-black text-cozy-orange tracking-widest uppercase block">Cozy Scrap Stickers & Stamps</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { 
+                    type: 'sparkles', 
+                    label: 'Sparkles', 
+                    icon: '✨', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'botanical-fern', 
+                    label: 'Fern Leaf', 
+                    icon: '🌿', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'cozy-pine', 
+                    label: 'Cozy Pine', 
+                    icon: '🌲', 
+                    width: 90, 
+                    height: 110 
+                  },
+                  { 
+                    type: 'soft-mountains', 
+                    label: 'Peak Peaks', 
+                    icon: '⛰️', 
+                    width: 120, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'coffee-ring', 
+                    label: 'Coffee Stain', 
+                    icon: '☕', 
+                    width: 100, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'vintage-stamp', 
+                    label: 'Vintage Stamp', 
+                    icon: '🍂', 
+                    width: 80, 
+                    height: 100 
+                  },
+                  { 
+                    type: 'heart-stamp', 
+                    label: 'Heart Stamp', 
+                    icon: '💌', 
+                    width: 90, 
+                    height: 90 
+                  },
+                  { 
+                    type: 'polaroid', 
+                    label: 'Polaroid Frame', 
+                    icon: '🖼️', 
+                    width: 110, 
+                    height: 130 
+                  },
+                  { 
+                    type: 'photo-corners', 
+                    label: 'Photo Corners', 
+                    icon: '📐', 
+                    width: 100, 
+                    height: 100 
+                  }
+                ].map(s => (
+                  <button
+                    key={s.type}
+                    onClick={() => canvasActions?.spawnObject('decorative', {
+                      width: s.width,
+                      height: s.height,
+                      color: s.type === 'heart-stamp' ? '#EF9A7A' : s.type === 'sparkles' ? '#F6D285' : '#4A3E31',
+                      meta: { decoType: s.type }
+                    })}
+                    className="p-1.5 bg-[#FDF8F1] border border-cozy-text-dark/15 rounded-lg text-[9px] font-black text-left flex items-center gap-1.5 cursor-pointer hover:border-cozy-text-dark"
+                  >
+                    <span className="text-sm">{s.icon}</span>
+                    <span className="truncate">{s.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

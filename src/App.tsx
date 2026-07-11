@@ -243,7 +243,7 @@ const SEED_BADGES: Badge[] = [
 ];
 
 function AppContent() {
-  const { addNotification, unreadCount, triggerConfetti } = useDopamine();
+  const { addNotification, unreadCount, triggerConfetti, requestNativePermission, nativeNotificationStatus } = useDopamine();
   const [isDopamineOpen, setIsDopamineOpen] = useState(false);
 
   // Navigation states
@@ -832,188 +832,158 @@ function AppContent() {
           <div className="w-12 h-12 bg-[#FAF5EC] rounded-2xl flex items-center justify-center border-2 border-cozy-text-dark shadow-sm overflow-hidden p-0.5">
             <svg viewBox="0 0 120 120" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                {/* Sunset background glow */}
+                {/* Terracotta Sun watercolor gradient */}
                 <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="30%">
-                  <stop offset="0%" stopColor="#FFF8E0" />
-                  <stop offset="45%" stopColor="#FFBA82" />
-                  <stop offset="100%" stopColor="#D57E56" />
+                  <stop offset="0%" stopColor="#F9A478" />
+                  <stop offset="60%" stopColor="#DC6E43" />
+                  <stop offset="100%" stopColor="#B44D24" />
                 </radialGradient>
                 
-                {/* Realistic gradients for the three cozy birds */}
+                {/* Cozy storybook gradients for the three nesting birds */}
                 <linearGradient id="blueBirdGrad" x1="30%" y1="0%" x2="70%" y2="100%">
-                  <stop offset="0%" stopColor="#A8C8E0" />
-                  <stop offset="50%" stopColor="#6C96B0" />
-                  <stop offset="100%" stopColor="#4F7188" />
+                  <stop offset="0%" stopColor="#8CBBD2" />
+                  <stop offset="60%" stopColor="#6597AC" />
+                  <stop offset="100%" stopColor="#4A7587" />
                 </linearGradient>
                 <linearGradient id="greenBirdGrad" x1="30%" y1="0%" x2="70%" y2="100%">
-                  <stop offset="0%" stopColor="#C2D2A9" />
-                  <stop offset="50%" stopColor="#92A177" />
-                  <stop offset="100%" stopColor="#697651" />
+                  <stop offset="0%" stopColor="#B4C79F" />
+                  <stop offset="60%" stopColor="#95A580" />
+                  <stop offset="100%" stopColor="#6C7B58" />
                 </linearGradient>
                 <linearGradient id="coralBirdGrad" x1="30%" y1="0%" x2="70%" y2="100%">
-                  <stop offset="0%" stopColor="#FFA680" />
-                  <stop offset="50%" stopColor="#D57E56" />
-                  <stop offset="100%" stopColor="#A35431" />
+                  <stop offset="0%" stopColor="#EFA48C" />
+                  <stop offset="60%" stopColor="#D87556" />
+                  <stop offset="100%" stopColor="#A84E34" />
                 </linearGradient>
 
-                {/* Parchment paper page shading */}
+                {/* Hand-made parchment paper page shading */}
                 <linearGradient id="pageLeftGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#E9E5D9" />
-                  <stop offset="75%" stopColor="#FCFAF6" />
-                  <stop offset="100%" stopColor="#EDE8DC" />
+                  <stop offset="0%" stopColor="#ECE6D7" />
+                  <stop offset="80%" stopColor="#FDFBF6" />
+                  <stop offset="100%" stopColor="#EDE7DA" />
                 </linearGradient>
                 <linearGradient id="pageRightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#DDD7C9" />
-                  <stop offset="25%" stopColor="#FCFAF6" />
-                  <stop offset="100%" stopColor="#F5F1E6" />
+                  <stop offset="0%" stopColor="#DDD6C7" />
+                  <stop offset="20%" stopColor="#FDFBF6" />
+                  <stop offset="100%" stopColor="#F4EEE0" />
                 </linearGradient>
 
-                {/* Leaf organic gradient */}
+                {/* Soft watercolor Leaf gradient */}
                 <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#B6C99D" />
-                  <stop offset="100%" stopColor="#7B8D61" />
+                  <stop offset="0%" stopColor="#A3B58E" />
+                  <stop offset="100%" stopColor="#7A8B65" />
                 </linearGradient>
 
-                {/* Twig realistic shading */}
+                {/* Rich twig shading */}
                 <linearGradient id="twigGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#725B4C" />
-                  <stop offset="100%" stopColor="#4F3F35" />
+                  <stop offset="0%" stopColor="#835C3F" />
+                  <stop offset="100%" stopColor="#4F3521" />
                 </linearGradient>
               </defs>
 
-              {/* Warm Radiating Sunset Dome */}
-              <circle cx="60" cy="48" r="19" fill="url(#sunGlow)" />
+              {/* Terracotta Sunset Dome */}
+              <circle cx="60" cy="38" r="16.5" fill="url(#sunGlow)" />
               
-              {/* Radiant Sun Rays */}
-              <g stroke="#D57E56" strokeWidth="2.2" strokeLinecap="round" opacity="0.95">
-                <line x1="60" y1="24" x2="60" y2="17" />
-                <line x1="47" y1="28" x2="42" y2="21" />
-                <line x1="73" y1="28" x2="78" y2="21" />
-                <line x1="37" y1="37" x2="30" y2="33" />
-                <line x1="83" y1="37" x2="90" y2="33" />
-                <line x1="35" y1="48" x2="27" y2="48" />
-                <line x1="85" y1="48" x2="93" y2="48" />
+              {/* Thick Radiating Sun Rays */}
+              <g stroke="#DC6E43" strokeWidth="2.6" strokeLinecap="round" opacity="0.95">
+                <line x1="60" y1="16" x2="60" y2="8" />
+                <line x1="48" y1="20" x2="42" y2="13" />
+                <line x1="38" y1="30" x2="30" y2="26" />
+                <line x1="72" y1="20" x2="78" y2="13" />
+                <line x1="82" y1="30" x2="90" y2="26" />
               </g>
 
-              {/* Leafy branch frame wrapping on the left */}
-              <path d="M34,76 C27,65 20,51 23,28" stroke="url(#twigGrad)" strokeWidth="2" strokeLinecap="round" fill="none" />
+              {/* Soft Leafy Branch Stem on Left */}
+              <path d="M34,68 C27,55 21,43 25,23" stroke="#82705E" strokeWidth="2.2" strokeLinecap="round" fill="none" />
               
-              {/* Detailed Leaf 1 */}
-              <path d="M23,28 C18,23 19,14 25,14 C28,19 27,25 23,28 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="23.5" y1="24" x2="25.5" y2="18" stroke="#4F3F35" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+              {/* Watercolor Leaf 1 (Top) */}
+              <path d="M25,23 C20,18 21,11 27,11 C30,16 29,21 25,23 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
+              <line x1="25" y1="19.5" x2="26.5" y2="14" stroke="#4F3F35" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
               
-              {/* Detailed Leaf 2 */}
-              <path d="M23,37 C16,33 15,25 21,24 C24,28 25,33 23,37 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="21.5" y1="33" x2="20.5" y2="28" stroke="#4F3F35" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+              {/* Watercolor Leaf 2 (Middle Left) */}
+              <path d="M23,32 C17,29 16,21 22,20 C25,24 26,29 23,32 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
+              <line x1="21.5" y1="28" x2="20.5" y2="23.5" stroke="#4F3F35" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
 
-              {/* Detailed Leaf 3 */}
-              <path d="M24,46 C17,42 16,34 22,33 C25,36 26,42 24,46 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="23" y1="42" x2="20.5" y2="37" stroke="#4F3F35" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+              {/* Watercolor Leaf 3 (Middle Right) */}
+              <path d="M27,38 C32,34 33,26 28,26 C25,30 25,35 27,38 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
+              <line x1="27.5" y1="34" x2="29" y2="29.5" stroke="#4F3F35" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
 
-              {/* Detailed Leaf 4 */}
-              <path d="M26,55 C20,51 19,44 25,42 C28,45 29,51 26,55 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="26.5" y1="51" x2="24.5" y2="46" stroke="#4F3F35" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+              {/* Watercolor Leaf 4 (Lower Left) */}
+              <path d="M24,46 C18,42 17,35 23,34 C26,38 27,43 24,46 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
+              <line x1="23.5" y1="42" x2="21.5" y2="37.5" stroke="#4F3F35" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
 
-              {/* Detailed Leaf 5 */}
-              <path d="M29,64 C23,60 22,53 28,51 C31,54 32,60 29,64 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="29" y1="60" x2="27" y2="55" stroke="#4F3F35" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+              {/* Watercolor Leaf 5 (Lower Right) */}
+              <path d="M28,52 C33,48 34,41 29,40 C26,44 26,49 28,52 Z" fill="url(#leafGrad)" stroke="#4F3F35" strokeWidth="1.5" strokeLinejoin="round" />
+              <line x1="28.5" y1="48" x2="30" y2="43.5" stroke="#4F3F35" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
 
-              {/* Open Book backing with layered page thickness shadow */}
-              <path d="M60,49.5 C68.5,43 80.5,43 89.5,45.5 L89.5,74.5 C80.5,72 68.5,73 60,79.5 C51.5,73 39.5,72 30.5,74.5 L30.5,45.5 C39.5,43 51.5,43 60,49.5 Z" fill="#4F3F35" />
+              {/* Open Book backing with layered parchment pages */}
+              <path d="M60,42 C67,37 77,37 84,39.5 L84,65 C77,63 67,64 60,69 C53,64 43,63 36,65 L36,39.5 C43,37 53,37 60,42 Z" fill="#5C4A3C" />
               
-              {/* Realistic multiple page margins underneath */}
-              <path d="M60,51 C68,45 79,45 88,47.5 L88,75.5 C79,73 68,74 60,80 Z" fill="#DDD7C9" opacity="0.5" />
+              {/* Left Page */}
+              <path d="M60,40.5 C52.5,36.5 42.5,37 37.5,38.8 L37.5,63 C42.5,61.2 52.5,61.7 60,67 Z" fill="url(#pageLeftGrad)" />
               
-              {/* Left Page (shaded creamy white parchment) */}
-              <path d="M60,48 C51.5,43.5 40.5,44 32.5,46 L32.5,73 C40.5,71 51.5,71.5 60,77.5 Z" fill="url(#pageLeftGrad)" />
+              {/* Right Page */}
+              <path d="M60,40.5 C67.5,36.5 77.5,37 82.5,38.8 L82.5,63 C77.5,61.2 67.5,61.7 60,67 Z" fill="url(#pageRightGrad)" />
               
-              {/* Right Page (shaded creamy white parchment) */}
-              <path d="M60,48 C68.5,43.5 79.5,44 87.5,46 L87.5,73 C79.5,71 68.5,71.5 60,77.5 Z" fill="url(#pageRightGrad)" />
+              {/* Spine Line */}
+              <path d="M60,40.5 L60,67" stroke="#4F3F35" strokeWidth="1.5" />
               
-              {/* Book center spine stitching line */}
-              <path d="M60,48 L60,77.5" stroke="#4F3F35" strokeWidth="1.8" />
-              
-              {/* Gentle placeholder lines on right page representing memory journaling */}
-              <line x1="64" y1="54" x2="77" y2="52" stroke="#725B4C" strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
-              <line x1="64" y1="59" x2="75" y2="57" stroke="#725B4C" strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
-              <line x1="64" y1="64" x2="73" y2="62" stroke="#725B4C" strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
+              {/* Journal writing lines on Right Page */}
+              <line x1="64" y1="46" x2="76" y2="46" stroke="#857262" strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
+              <line x1="64" y1="51" x2="78" y2="51" stroke="#857262" strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
+              <line x1="64" y1="56" x2="74" y2="56" stroke="#857262" strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
 
-              {/* Golden Tail Ribbon / Bookmark Hanging Down */}
-              <path d="M71,74 C71,83 67,88 67,91 C71,91 74,86 74,74 Z" fill="#D57E56" stroke="#4F3F35" strokeWidth="1.8" strokeLinejoin="round" />
-
-              {/* Nesting Birds sitting coziy inside */}
+              {/* Three Birds in the Nest */}
               {/* Left Blue Bird */}
               <g id="blue-bird">
-                {/* Hair Crests */}
-                <path d="M31,59 C29,56 31,54 33,54 C33,56 32,58 31,59 Z" fill="#6C96B0" stroke="#4F3F35" strokeWidth="1.2" />
-                <path d="M34,58 C33,55 35,53 37,53 C37,55 35,57 34,58 Z" fill="#6C96B0" stroke="#4F3F35" strokeWidth="1.2" />
-                {/* Main Body */}
-                <path d="M28,73 C27,62 36,54 44,61 C47,64 45,73 40,75 C34,77 29,77 28,73 Z" fill="url(#blueBirdGrad)" stroke="#4F3F35" strokeWidth="1.8" strokeLinejoin="round" />
-                {/* Wing feather detail */}
-                <path d="M29,71 C30,66 35,63 38,67 C36,70 32,73 29,71 Z" fill="#4E7088" stroke="#4F3F35" strokeWidth="1.2" opacity="0.8" />
-                {/* Rosy Cheek */}
-                <circle cx="32" cy="65" r="2" fill="#E05B3A" opacity="0.25" />
-                {/* Sparkle Eye with white highlight */}
-                <circle cx="35" cy="62.5" r="1.6" fill="#4F3F35" />
-                <circle cx="34.6" cy="62" r="0.6" fill="#FFFFFF" />
-                {/* Golden Beak */}
-                <polygon points="41.5,63.5 46.5,65 41.5,67" fill="#EAA74B" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
+                {/* Hair tufts */}
+                <path d="M38,55 C37,51 40,51 40,55 Z" fill="#6597AC" stroke="#4F3F35" strokeWidth="1.2" />
+                <path d="M41,55 C40,51 43,51 43,55 Z" fill="#6597AC" stroke="#4F3F35" strokeWidth="1.2" />
+                {/* Plump body */}
+                <path d="M33,70 C31,60 41,54 48,60 C51,63 49,70 45,72 C41,74 35,74 33,70 Z" fill="url(#blueBirdGrad)" stroke="#4F3F35" strokeWidth="1.6" strokeLinejoin="round" />
+                {/* Soft wing feather */}
+                <path d="M34,68 C35,63 39,61 41,64 C39,67 36,69 34,68 Z" fill="#4B778B" stroke="#4F3F35" strokeWidth="1.1" opacity="0.85" />
+                {/* Eye */}
+                <circle cx="44.5" cy="61.5" r="1.3" fill="#3D3028" />
+                {/* Beak */}
+                <polygon points="48,61 51,62.5 48,64" fill="#EFA338" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
               </g>
 
-              {/* Middle Olive/Sage Bird */}
+              {/* Middle Sage Green Bird */}
               <g id="green-bird">
-                {/* Hair Crest */}
-                <path d="M48,62 C47,59 49,57 51,57 C51,59 49,61 48,62 Z" fill="#92A177" stroke="#4F3F35" strokeWidth="1.2" />
-                {/* Body */}
-                <path d="M44,77 C42,67 51,61 58,66 C60,69 58,77 53,79 C48,81 45,80 44,77 Z" fill="url(#greenBirdGrad)" stroke="#4F3F35" strokeWidth="1.8" strokeLinejoin="round" />
-                {/* Wing */}
-                <path d="M45,74 C47,70 51,68 53,71 C51,74 48,76 45,74 Z" fill="#64744C" stroke="#4F3F35" strokeWidth="1.2" opacity="0.8" />
-                {/* Rosy Cheek */}
-                <circle cx="47" cy="70" r="2" fill="#E05B3A" opacity="0.25" />
+                {/* Hair tuft */}
+                <path d="M57.5,61.5 C57,58 59,58 59,61.5 Z" fill="#95A580" stroke="#4F3F35" strokeWidth="1.2" />
+                {/* Round body */}
+                <path d="M51,75 C50,65 59,61 64,66 C66,69 65,76 60,78 C56,80 52,79 51,75 Z" fill="url(#greenBirdGrad)" stroke="#4F3F35" strokeWidth="1.6" strokeLinejoin="round" />
+                {/* Soft wing */}
+                <path d="M52,73 C53,69 57,67 58,70 C57,73 54,75 52,73 Z" fill="#6F7E5B" stroke="#4F3F35" strokeWidth="1.1" opacity="0.85" />
                 {/* Eye */}
-                <circle cx="50" cy="67.5" r="1.6" fill="#4F3F35" />
-                <circle cx="49.6" cy="67" r="0.6" fill="#FFFFFF" />
+                <circle cx="58" cy="65" r="1.3" fill="#3D3028" />
                 {/* Beak */}
-                <polygon points="55.5,68.5 60.5,70 55.5,72" fill="#EAA74B" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
+                <polygon points="61,64.5 64,65.5 61,66.5" fill="#EFA338" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
               </g>
 
               {/* Right Coral Bird */}
               <g id="coral-bird">
-                {/* Hair Crest */}
-                <path d="M68,60 C69,57 67,55 65,55 C65,57 67,59 68,60 Z" fill="#D57E56" stroke="#4F3F35" strokeWidth="1.2" />
-                <path d="M65,61 C64,58 62,56 60,56 C60,58 62,60 65,61 Z" fill="#D57E56" stroke="#4F3F35" strokeWidth="1.2" />
-                {/* Body */}
-                <path d="M74,75 C76,65 67,59 60,65 C58,68 59,76 64,78 C68,80 72,79 74,75 Z" fill="url(#coralBirdGrad)" stroke="#4F3F35" strokeWidth="1.8" strokeLinejoin="round" />
-                {/* Wing */}
-                <path d="M71,72 C71,67 67,65 65,68 C66,71 69,73 71,72 Z" fill="#A35431" stroke="#4F3F35" strokeWidth="1.2" opacity="0.8" />
-                {/* Rosy Cheek */}
-                <circle cx="68.5" cy="67.5" r="2" fill="#E05B3A" opacity="0.25" />
+                {/* Hair tufts */}
+                <path d="M66,61 C66,57 68,57 68,61 Z" fill="#D87556" stroke="#4F3F35" strokeWidth="1.2" />
+                <path d="M64,61 C63,58 65,58 65,61 Z" fill="#D87556" stroke="#4F3F35" strokeWidth="1.2" />
+                {/* Cute body looking left */}
+                <path d="M72,74 C74,65 67,61 61,66 C59,69 60,76 64,78 C68,80 71,78 72,74 Z" fill="url(#coralBirdGrad)" stroke="#4F3F35" strokeWidth="1.6" strokeLinejoin="round" />
+                {/* Soft wing */}
+                <path d="M69,72 C68,68 64,67 63,69 C65,72 67,73 69,72 Z" fill="#B45339" stroke="#4F3F35" strokeWidth="1.1" opacity="0.85" />
                 {/* Eye */}
-                <circle cx="66.5" cy="65.5" r="1.6" fill="#4F3F35" />
-                <circle cx="66.1" cy="65" r="0.6" fill="#FFFFFF" />
+                <circle cx="64.5" cy="64.5" r="1.3" fill="#3D3028" />
                 {/* Beak */}
-                <polygon points="61,64.5 56,66 61,67.5" fill="#EAA74B" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
+                <polygon points="61,64.5 58,65.5 61,66.5" fill="#EFA338" stroke="#4F3F35" strokeWidth="1.2" strokeLinejoin="round" />
               </g>
 
-              {/* Nest Twigs with rich overlapping weave pattern */}
-              <path d="M18,62 C23,71 31,77 40,79" stroke="url(#twigGrad)" strokeWidth="2.2" strokeLinecap="round" fill="none" />
-              <path d="M102,62 C97,71 89,77 80,79" stroke="url(#twigGrad)" strokeWidth="2.2" strokeLinecap="round" fill="none" />
-              <path d="M21,68 C35,95 85,95 99,68" stroke="url(#twigGrad)" strokeWidth="3.2" strokeLinecap="round" fill="none" />
-              <path d="M25,74 C38,92 82,92 95,74" stroke="url(#twigGrad)" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-              <path d="M31,80 C40,97 80,97 89,80" stroke="url(#twigGrad)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-
-              {/* Extra twig details for depth */}
-              <path d="M20,68 C24,75 32,80 38,81" stroke="url(#twigGrad)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-              <path d="M100,69 C96,75 88,80 82,81" stroke="url(#twigGrad)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-              <path d="M38,89 Q60,97 82,89" stroke="url(#twigGrad)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-
-              {/* Warm cozy golden sparkle stars */}
-              <g fill="#F5D17E" stroke="#4F3F35" strokeWidth="1">
-                {/* Sparkle 1 */}
-                <path d="M85,25 L86.5,28 L89.5,28.5 L87,30.5 L88,33.5 L85,32 L82,33.5 L83,30.5 L80.5,28.5 L83.5,28 Z" transform="scale(0.6) translate(60, 10)" />
-                {/* Sparkle 2 */}
-                <path d="M85,25 L86.5,28 L89.5,28.5 L87,30.5 L88,33.5 L85,32 L82,33.5 L83,30.5 L80.5,28.5 L83.5,28 Z" transform="scale(0.45) translate(40, 52)" />
-              </g>
+              {/* Beautiful layered brown nest twigs wrapping the base */}
+              <path d="M20,60 C30,78 90,78 100,60" stroke="#825C3E" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+              <path d="M16,65 C28,88 92,88 104,65" stroke="#5F4C3F" strokeWidth="3.2" strokeLinecap="round" fill="none" />
+              <path d="M24,72 C35,93 85,93 96,72" stroke="#725B4C" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+              <path d="M30,78 C42,98 78,98 90,78" stroke="#5F4C3F" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+              <path d="M38,84 Q60,95 82,84" stroke="#4A311F" strokeWidth="1.8" strokeLinecap="round" fill="none" />
             </svg>
           </div>
           <div className="flex flex-col justify-center select-none" id="daynest-logo-text">
@@ -1049,11 +1019,6 @@ function AppContent() {
               title="Menu & Settings"
             >
               <Menu size={18} strokeWidth={3} className="text-cozy-text-dark" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-cozy-orange text-white text-[9px] font-black w-5.5 h-5.5 rounded-full border-2 border-cozy-text-dark flex items-center justify-center shadow-sm">
-                  {unreadCount}
-                </span>
-              )}
             </button>
 
             {/* Floating Dropdown Menu */}
@@ -1099,11 +1064,11 @@ function AppContent() {
                       </div>
                     </button>
 
-                    {/* Notifications Button */}
+                     {/* Device Notifications Button */}
                     <button
-                      onClick={() => {
-                        setIsDopamineOpen(true);
+                      onClick={async () => {
                         setIsHeaderMenuOpen(false);
+                        await requestNativePermission();
                       }}
                       className="flex items-center gap-3 px-2.5 py-2 hover:bg-[#FFFCEB] rounded-xl text-left cursor-pointer transition text-xs font-black text-cozy-text-dark"
                     >
@@ -1112,14 +1077,18 @@ function AppContent() {
                       </div>
                       <div className="flex-1 flex items-center justify-between gap-1">
                         <div>
-                          <p className="leading-tight">Notifications</p>
-                          <p className="text-[8px] text-cozy-text-muted font-bold leading-none mt-0.5">Dopamine Hub & Alerts</p>
+                          <p className="leading-tight">Device Notifications</p>
+                          <p className="text-[8px] text-cozy-text-muted font-bold leading-none mt-0.5">
+                            {nativeNotificationStatus === 'granted' ? 'Allowed on this device' : 'Click to enable device alerts'}
+                          </p>
                         </div>
-                        {unreadCount > 0 && (
-                          <span className="bg-cozy-orange text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border border-cozy-text-dark shadow-sm shrink-0">
-                            {unreadCount} NEW
-                          </span>
-                        )}
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border shadow-sm shrink-0 uppercase ${
+                          nativeNotificationStatus === 'granted' 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                            : 'bg-cozy-orange/10 text-cozy-orange border-cozy-orange/20'
+                        }`}>
+                          {nativeNotificationStatus === 'granted' ? 'Active' : 'Enable'}
+                        </span>
                       </div>
                     </button>
 
@@ -1190,14 +1159,7 @@ function AppContent() {
         </div>
       </nav>
 
-      {/* Floating Addictive Toast Stack */}
-      <DopamineToastsStack />
 
-      {/* Slide-out Dopamine Log Panel */}
-      <DopamineLogPanel 
-        isOpen={isDopamineOpen} 
-        onClose={() => setIsDopamineOpen(false)} 
-      />
 
       {/* Main Content Layout Container */}
       <div className="flex-1 flex w-full relative">

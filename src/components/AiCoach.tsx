@@ -947,6 +947,18 @@ export default function AiCoach({
                             <span className={`text-[9px] border-2 border-cozy-text-dark px-2.5 py-1 rounded-xl uppercase font-mono font-black shadow-xs ${cfg.badge}`}>
                               {plan.category}
                             </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
+                                  handleDeletePlan(plan.id);
+                                }
+                              }}
+                              className="p-1 rounded-lg border-2 border-cozy-text-dark bg-white hover:bg-red-50 text-red-500 transition-all shadow-xs hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
+                              title="Delete Plan"
+                            >
+                              <Trash2 size={11} strokeWidth={2.5} />
+                            </button>
                           </div>
                         </div>
  
@@ -1051,6 +1063,18 @@ export default function AiCoach({
                       <div className="flex items-center gap-3 shrink-0 text-[8.5px] font-mono font-black uppercase">
                         <span className={`border-2 border-cozy-text-dark px-2.5 py-0.5 rounded-full ${cfg.badge}`}>{plan.category}</span>
                         <span className="bg-cozy-orange/15 text-cozy-orange px-2.5 py-0.5 rounded-full border-2 border-cozy-text-dark">{Object.keys(plan.modules || {}).length} LEGO blocks</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
+                              handleDeletePlan(plan.id);
+                            }
+                          }}
+                          className="p-1 rounded-lg border-2 border-cozy-text-dark bg-white hover:bg-red-50 text-red-500 transition-all shadow-xs hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
+                          title="Delete Plan"
+                        >
+                          <Trash2 size={11} strokeWidth={2.5} />
+                        </button>
                         <ChevronRight size={13} className="text-cozy-text-muted group-hover:translate-x-1 transition-transform" />
                       </div>
                     </motion.div>
@@ -1109,7 +1133,21 @@ export default function AiCoach({
                               <div onClick={() => setSelectedPlan(plan)} className="space-y-2">
                                 <div className="flex justify-between items-start gap-1">
                                   <span className="text-xl w-7 h-7 bg-[#FAF6EB] border border-cozy-text-dark/10 rounded-lg flex items-center justify-center">{plan.icon}</span>
-                                  <span className="text-[8px] font-black text-cozy-orange bg-cozy-orange/10 px-2 py-0.5 border border-cozy-orange/25 rounded-full uppercase">#{plan.priority}</span>
+                                  <div className="flex gap-1.5 items-center">
+                                    <span className="text-[8px] font-black text-cozy-orange bg-cozy-orange/10 px-2 py-0.5 border border-cozy-orange/25 rounded-full uppercase">#{plan.priority}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(`Are you sure you want to delete the "${plan.title}" workspace?`)) {
+                                          handleDeletePlan(plan.id);
+                                        }
+                                      }}
+                                      className="p-1 rounded bg-white hover:bg-red-50 text-red-500 transition-all border border-cozy-text-dark/20 hover:scale-110 cursor-pointer flex items-center justify-center shrink-0"
+                                      title="Delete Plan"
+                                    >
+                                      <Trash2 size={10} strokeWidth={2.5} />
+                                    </button>
+                                  </div>
                                 </div>
                                 <h5 className="text-[11px] font-black text-cozy-text-dark group-hover:text-cozy-orange leading-tight">{plan.title}</h5>
                               </div>
